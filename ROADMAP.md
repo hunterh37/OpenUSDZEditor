@@ -40,7 +40,7 @@ Everything below is scoped to what native Swift + RealityKit + embedded Python/u
 
 ## Phase 3 — Editing (v0.3, weeks 15–22)
 
-- [ ] EditingKit command layer + undo/redo bridged to NSUndoManager
+- [x] EditingKit command layer + undo/redo bridged to NSUndoManager — `CommandStack` + `InMemoryStage` + full command set (visibility/active/rename/remove/set-attr/composite) + `UndoManagerBridge`
 - [ ] Transform gizmos (translate/rotate/scale, snapping, coalesced undo)
 - [ ] Editable inspector: transforms, prim metadata, stage metadata
 - [ ] Part-level editing (flagship): drill-down/walk-up viewport selection, breadcrumb, move any child prim at any depth

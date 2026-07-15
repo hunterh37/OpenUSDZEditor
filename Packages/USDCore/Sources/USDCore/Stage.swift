@@ -101,5 +101,8 @@ public enum StageMutation: Hashable, Sendable {
     case setActive(path: PrimPath, isActive: Bool)
     case renamePrim(path: PrimPath, newName: String)
     case removePrim(path: PrimPath)
+    /// Inserts `prim` as a child of `parent` (root when `nil`) at `index`,
+    /// clamped into range. The inverse of `removePrim`, so deletes are undoable.
+    case insertPrim(parent: PrimPath?, index: Int, prim: Prim)
     case setStageMetadata(StageMetadata)
 }
