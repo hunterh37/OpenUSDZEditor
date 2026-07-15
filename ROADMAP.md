@@ -16,7 +16,7 @@ Everything below is scoped to what native Swift + RealityKit + embedded Python/u
 
 - [x] RealityKit viewport: fast-path loading, orbit/pan/dolly, frame selection, grid/axes
 - [ ] IBL presets + custom HDR, exposure, background modes
-- [ ] Outliner (search, visibility, type icons) + read-only inspector (transform, prim, material, stage tabs)
+- [x] Outliner (search, visibility, type icons) + read-only inspector (transform, prim, material, stage tabs)
 - [x] Stats HUD, bounds/AR-scale readout
 - [ ] Animation playback transport
 - [ ] Debug view modes: wireframe, normals, UV checker, matcap
@@ -31,8 +31,8 @@ Everything below is scoped to what native Swift + RealityKit + embedded Python/u
 - [ ] Native GLB/glTF importer — PBR ✓, KHR subset ✓, skinning + animations ✓ (UsdSkel); Draco decode still TODO
 - [x] OBJ/STL/PLY/DAE via ModelIO
 - [x] Texture pipeline (resize, re-encode, channel handling)
-- [ ] Conversion sheet UI with per-stage options + live log; presets (ecommerce, quicklook-strict, lossless) — preset model + CLI `--preset` ✓; sheet UI + live log TODO
-- [ ] Batch converter window + CSV/JSON reports — engine + CSV/JSON reports ✓ (BatchConverter); window UI TODO
+- [x] Conversion sheet UI with per-stage options + live log; presets (ecommerce, quicklook-strict, lossless) — preset model + CLI `--preset` ✓; sheet UI + live log ✓
+- [x] Batch converter window + CSV/JSON reports — engine + CSV/JSON reports ✓ (BatchConverter); window UI ✓
 - [ ] `dicyanin-usdz` CLI: convert ✓ (with `--preset`), convert-batch ✓ (with `--preset`), info ✓, thumbnail TODO
 - [ ] glTF sample-model corpus in CI with success-rate gate
 
@@ -59,10 +59,10 @@ Everything below is scoped to what native Swift + RealityKit + embedded Python/u
 
 ## Phase 4 — Validation & Scripting (v0.4, weeks 23–28)
 
-- [ ] ValidationRule engine + v1 rule catalog, live diagnostics drawer, quick-fixes
+- [ ] ValidationRule engine + v1 rule catalog, live diagnostics drawer (drawer ✓; quick-fixes TODO)
 - [ ] ComplianceChecker (ARKit profile) integration, export gating
 - [ ] Python console (REPL, injected `stage`/`selection`/`app`, single-undo script runs)
-- [ ] Script library panel + bundled starter scripts
+- [x] Script library panel + bundled starter scripts (panel + source preview ✓; REPL execution TODO)
 - [ ] CLI: `validate`, `run`
 - [ ] FBX support via checksum-verified FBX2glTF download flow
 

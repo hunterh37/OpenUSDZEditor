@@ -3,15 +3,11 @@ import USDCore
 import ViewportKit
 import DicyaninDesignSystem
 
-extension ColorToken {
-    /// Maps a design-system token to SwiftUI.
-    var color: Color {
-        Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
-    }
-}
-
-/// Phase 0 chrome: left outliner / center viewport placeholder / right
-/// inspector placeholder (specs/editor-ui.md). Panels become real in Phase 1.
+/// The editor shell: a top action bar, then outliner / viewport / inspector,
+/// with a collapsible validation drawer under the viewport and modal surfaces
+/// for conversion, batch, and scripts. Each panel is a thin view over an
+/// already-tested engine (ConversionKit, ValidationKit, ScriptingKit).
+/// (`ColorToken.color` now lives in Styling.swift, shared across panels.)
 public struct EditorShellView: View {
 
     let stage: (any USDStageProtocol)?
@@ -21,22 +17,120 @@ public struct EditorShellView: View {
     @State private var searchText = ""
     @State private var collapsed: Set<PrimPath> = []
 
+    @State private var showValidation = false
+    @State private var activeSheet: Sheet?
+
+    private enum Sheet: String, Identifiable {
+        case convert, batch, scripts
+        var id: String { rawValue }
+    }
+
+    /// Menu-bar commands post these; the shell mirrors its toolbar actions so
+    /// menu shortcuts and toolbar buttons drive the same state.
+    public enum MenuCommand: String {
+        case convert, batch, scripts, validate
+        public static let notification = Notification.Name("EditorUI.MenuCommand")
+    }
+
     public init(stage: (any USDStageProtocol)? = nil, modelURL: URL? = nil) {
         self.stage = stage
         self.modelURL = modelURL
     }
 
     public var body: some View {
-        HSplitView {
-            outliner
-                .frame(minWidth: 220, idealWidth: 260)
-            viewport
-                .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
-            inspectorPlaceholder
-                .frame(minWidth: 240, idealWidth: 280)
+        VStack(spacing: 0) {
+            actionBar
+            Divider().overlay(Palette.panelBorder.color)
+            HSplitView {
+                outliner
+                    .frame(minWidth: 220, idealWidth: 260)
+                centerColumn
+                    .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+                InspectorView(stage: stage, selection: selection)
+                    .frame(minWidth: 260, idealWidth: 300)
+            }
         }
         .background(Palette.windowBackground.color)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .convert: ConversionSheet(onClose: dismissSheet)
+            case .batch: BatchView(onClose: dismissSheet)
+            case .scripts: ScriptsPanel(onClose: dismissSheet)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: MenuCommand.notification)) { note in
+            guard let raw = note.object as? String,
+                  let command = MenuCommand(rawValue: raw) else { return }
+            switch command {
+            case .convert: activeSheet = .convert
+            case .batch: activeSheet = .batch
+            case .scripts: activeSheet = .scripts
+            case .validate: if stage != nil { showValidation.toggle() }
+            }
+        }
     }
+
+    private func dismissSheet() { activeSheet = nil }
+
+    // MARK: Action bar
+
+    private var actionBar: some View {
+        HStack(spacing: Spacing.sm) {
+            actionButton("Convert", systemImage: "arrow.triangle.2.circlepath") { activeSheet = .convert }
+            actionButton("Batch", systemImage: "square.stack.3d.up") { activeSheet = .batch }
+            actionButton("Scripts", systemImage: "curlybraces") { activeSheet = .scripts }
+            Divider().frame(height: 16).overlay(Palette.panelBorder.color)
+            actionButton(showValidation ? "Hide Issues" : "Validate",
+                         systemImage: "checkmark.shield",
+                         isActive: showValidation) {
+                showValidation.toggle()
+            }
+            Spacer()
+            if let stage {
+                Text("\(stage.primCount) prims")
+                    .font(.system(size: TypeScale.caption, design: .monospaced))
+                    .foregroundStyle(Palette.textSecondary.color)
+            }
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .background(Palette.panelBackground.color)
+    }
+
+    private func actionButton(_ title: String, systemImage: String,
+                              isActive: Bool = false,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: TypeScale.body, weight: .medium))
+                .padding(.horizontal, Spacing.xs)
+                .padding(.vertical, Spacing.xxs)
+                .background(RoundedRectangle(cornerRadius: 5)
+                    .fill(isActive ? Palette.accent.color.opacity(0.25) : .clear))
+                .foregroundStyle(isActive ? Palette.accent.color : Palette.textPrimary.color)
+        }
+        .buttonStyle(.plain)
+        // Conversion/batch/scripts work without an open stage; validation needs one.
+        .disabled(stage == nil && title.hasPrefix("Validate"))
+    }
+
+    // MARK: Center column (viewport + validation drawer)
+
+    private var centerColumn: some View {
+        VSplitView {
+            viewport
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if showValidation {
+                ValidationDrawer(
+                    stage: stage,
+                    onSelectPrim: { selection = selection.selecting($0) },
+                    onClose: { showValidation = false })
+                    .frame(minHeight: 140, idealHeight: 200, maxHeight: 320)
+            }
+        }
+    }
+
+    // MARK: Outliner
 
     private var outliner: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -131,26 +225,5 @@ public struct EditorShellView: View {
                     .foregroundStyle(Palette.textSecondary.color)
             }
         }
-    }
-
-    private var inspectorPlaceholder: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("Inspector")
-                .font(.system(size: TypeScale.heading, weight: .semibold))
-                .foregroundStyle(Palette.textPrimary.color)
-            if let path = selection.primary {
-                Text(path.description)
-                    .font(.system(size: TypeScale.body, design: .monospaced))
-                    .foregroundStyle(Palette.textSecondary.color)
-            } else {
-                Text("No selection")
-                    .font(.system(size: TypeScale.body))
-                    .foregroundStyle(Palette.textSecondary.color)
-            }
-            Spacer()
-        }
-        .padding(Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.panelBackground.color)
     }
 }

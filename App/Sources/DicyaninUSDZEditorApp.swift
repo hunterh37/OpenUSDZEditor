@@ -47,7 +47,23 @@ struct DicyaninUSDZEditorApp: App {
                 Button("Open…") { presentOpenPanel() }
                     .keyboardShortcut("o")
             }
+            CommandMenu("Convert") {
+                Button("Convert File…") { postMenu(.convert) }
+                    .keyboardShortcut("k")
+                Button("Batch Convert…") { postMenu(.batch) }
+                    .keyboardShortcut("b", modifiers: [.command, .shift])
+                Divider()
+                Button("Validate Stage") { postMenu(.validate) }
+                    .keyboardShortcut("u")
+                    .disabled(stage == nil)
+                Button("Scripts…") { postMenu(.scripts) }
+            }
         }
+    }
+
+    private func postMenu(_ command: EditorShellView.MenuCommand) {
+        NotificationCenter.default.post(
+            name: EditorShellView.MenuCommand.notification, object: command.rawValue)
     }
 
     private func presentOpenPanel() {
