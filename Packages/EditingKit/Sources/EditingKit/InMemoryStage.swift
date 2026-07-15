@@ -7,6 +7,7 @@ public enum StageMutationError: Error, Hashable, Sendable, CustomStringConvertib
     case parentNotFound(PrimPath)
     case invalidName(String)
     case nameCollision(PrimPath)
+    case variantSetNotFound(path: PrimPath, setName: String)
 
     public var description: String {
         switch self {
@@ -14,6 +15,7 @@ public enum StageMutationError: Error, Hashable, Sendable, CustomStringConvertib
         case .parentNotFound(let p): return "No parent prim at \(p)"
         case .invalidName(let n): return "Invalid prim name: \(n)"
         case .nameCollision(let p): return "A sibling already exists at \(p)"
+        case let .variantSetNotFound(p, s): return "No variant set '\(s)' on \(p)"
         }
     }
 }
@@ -67,6 +69,13 @@ public final class InMemoryStage: USDStageMutable, @unchecked Sendable {
                 try insert(prim, parent: parent, index: index)
             case let .setStageMetadata(metadata):
                 snapshot.metadata = metadata
+            case let .setVariantSelection(path, setName, selection):
+                try mutate(at: path) { prim in
+                    guard let i = prim.variantSets.firstIndex(where: { $0.name == setName }) else {
+                        throw StageMutationError.variantSetNotFound(path: path, setName: setName)
+                    }
+                    prim.variantSets[i].selection = selection
+                }
             }
         }
     }

@@ -111,6 +111,35 @@ public struct SetAttributeCommand: EditCommand {
     }
 }
 
+/// Switch the active variant of a named variant set on a prim (PRD §5.3 /
+/// specs/editing-model.md — variant switching). Undo restores the prior
+/// selection, so flipping "color = blue" back to "red" is one Edit ▸ Undo.
+public struct SetVariantSelectionCommand: EditCommand {
+    public let path: PrimPath
+    public let setName: String
+    public let newSelection: String?
+    public let oldSelection: String?
+
+    public init(path: PrimPath, setName: String, newSelection: String?, oldSelection: String?) {
+        self.path = path
+        self.setName = setName
+        self.newSelection = newSelection
+        self.oldSelection = oldSelection
+    }
+
+    public var label: String {
+        "Set \(setName) to \(newSelection ?? "none")"
+    }
+
+    public func execute(on stage: any USDStageMutable) throws {
+        try stage.apply(.setVariantSelection(path: path, setName: setName, selection: newSelection))
+    }
+
+    public func undo(on stage: any USDStageMutable) throws {
+        try stage.apply(.setVariantSelection(path: path, setName: setName, selection: oldSelection))
+    }
+}
+
 /// Groups several commands into one undoable unit — the seam gizmo drags use to
 /// coalesce a stream of transform edits into a single Edit ▸ Undo entry.
 public struct CompositeCommand: EditCommand {

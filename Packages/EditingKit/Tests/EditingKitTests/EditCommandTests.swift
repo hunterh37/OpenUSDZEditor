@@ -15,6 +15,47 @@ final class RecordingStage: USDStageMutable, @unchecked Sendable {
     }
 }
 
+@Suite("SetVariantSelectionCommand")
+struct SetVariantSelectionCommandTests {
+
+    let path = PrimPath("/Car")!
+
+    @Test func executeAndUndoFlipSelection() throws {
+        let stage = RecordingStage()
+        let command = SetVariantSelectionCommand(path: path, setName: "color", newSelection: "blue", oldSelection: "red")
+        try command.execute(on: stage)
+        try command.undo(on: stage)
+        #expect(stage.applied == [
+            .setVariantSelection(path: path, setName: "color", selection: "blue"),
+            .setVariantSelection(path: path, setName: "color", selection: "red"),
+        ])
+    }
+
+    @Test func labelNamesSetAndSelection() {
+        #expect(SetVariantSelectionCommand(path: path, setName: "color", newSelection: "blue", oldSelection: "red").label == "Set color to blue")
+        #expect(SetVariantSelectionCommand(path: path, setName: "color", newSelection: nil, oldSelection: "red").label == "Set color to none")
+    }
+
+    @Test func appliesAgainstInMemoryStage() throws {
+        let car = Prim(path: path, typeName: "Xform",
+                       variantSets: [VariantSet(name: "color", variants: ["red", "blue"], selection: "red")])
+        let stage = InMemoryStage(StageSnapshot(rootPrims: [car]))
+        let command = SetVariantSelectionCommand(path: path, setName: "color", newSelection: "blue", oldSelection: "red")
+
+        try command.execute(on: stage)
+        #expect(stage.rootPrims[0].variantSets[0].selection == "blue")
+        try command.undo(on: stage)
+        #expect(stage.rootPrims[0].variantSets[0].selection == "red")
+    }
+
+    @Test func unknownVariantSetThrows() {
+        let car = Prim(path: path, typeName: "Xform")
+        let stage = InMemoryStage(StageSnapshot(rootPrims: [car]))
+        let command = SetVariantSelectionCommand(path: path, setName: "ghost", newSelection: "x", oldSelection: nil)
+        #expect(throws: StageMutationError.self) { try command.execute(on: stage) }
+    }
+}
+
 @Suite("SetVisibilityCommand")
 struct SetVisibilityCommandTests {
 

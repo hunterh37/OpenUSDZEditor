@@ -105,4 +105,7 @@ public enum StageMutation: Hashable, Sendable {
     /// clamped into range. The inverse of `removePrim`, so deletes are undoable.
     case insertPrim(parent: PrimPath?, index: Int, prim: Prim)
     case setStageMetadata(StageMetadata)
+    /// Selects `selection` (or clears it when `nil`) in the named variant set on
+    /// the prim at `path`. The classic "swap the red variant for blue" edit.
+    case setVariantSelection(path: PrimPath, setName: String, selection: String?)
 }
