@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import USDCore
 import ViewportKit
 import DicyaninDesignSystem
@@ -15,6 +16,14 @@ public struct EditorShellView: View {
     let document: EditorDocument?
     @State private var searchText = ""
     @State private var collapsed: Set<PrimPath> = []
+
+    /// The row currently being renamed inline (nil when not editing), plus its
+    /// working text. Committing runs an undoable `RenamePrimCommand`.
+    @State private var renameTarget: PrimPath?
+    @State private var renameText = ""
+
+    /// The row a drag is currently hovering over (for a drop highlight).
+    @State private var dropTarget: PrimPath?
 
     /// Read-only stage view for the panels that only display state.
     private var stage: (any USDStageProtocol)? { document?.snapshot }
@@ -151,6 +160,10 @@ public struct EditorShellView: View {
             .listStyle(.sidebar)
         }
         .background(Palette.panelBackground.color)
+        // Dropping onto empty outliner space reparents to the stage root.
+        .dropDestination(for: String.self) { items, _ in
+            reparentDropped(items, under: nil)
+        }
     }
 
     /// A single outliner row: disclosure chevron (for rows with children),
@@ -180,12 +193,20 @@ public struct EditorShellView: View {
                 Color.clear.frame(width: 14, height: 14)
             }
 
-            Text(row.path.name)
-                .font(.system(size: TypeScale.body))
-                .foregroundStyle(row.isActive
-                    ? Palette.textPrimary.color
-                    : Palette.textSecondary.color)
-                .lineLimit(1)
+            if renameTarget == row.path {
+                TextField("Name", text: $renameText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: TypeScale.body))
+                    .onSubmit { commitRename() }
+                    .onExitCommand { cancelRename() }
+            } else {
+                Text(row.path.name)
+                    .font(.system(size: TypeScale.body))
+                    .foregroundStyle(row.isActive
+                        ? Palette.textPrimary.color
+                        : Palette.textSecondary.color)
+                    .lineLimit(1)
+            }
             Spacer(minLength: 0)
             if row.visibility == .invisible {
                 Image(systemName: "eye.slash")
@@ -196,10 +217,90 @@ public struct EditorShellView: View {
         .padding(.horizontal, Spacing.xs)
         .background(
             RoundedRectangle(cornerRadius: 5)
-                .fill(isSelected ? Palette.accent.color.opacity(0.25) : .clear)
+                .fill(rowBackground(row, isSelected: isSelected))
         )
         .contentShape(Rectangle())
-        .onTapGesture { select(row.path) }
+        .onTapGesture {
+            // ⇧-click extends the multi-selection; a plain click replaces it.
+            select(row.path, additive: NSEvent.modifierFlags.contains(.shift))
+        }
+        .contextMenu { rowContextMenu(row) }
+        // Drag a prim onto another to reparent it (world-transform preserving).
+        .draggable(row.path.description)
+        .dropDestination(for: String.self) { items, _ in
+            reparentDropped(items, under: row.path)
+        } isTargeted: { hovering in
+            dropTarget = hovering ? row.path : (dropTarget == row.path ? nil : dropTarget)
+        }
+    }
+
+    /// Selection tint, or a stronger accent while a valid drag hovers the row.
+    private func rowBackground(_ row: OutlinerModel.Row, isSelected: Bool) -> Color {
+        if dropTarget == row.path { return Palette.accent.color.opacity(0.4) }
+        return isSelected ? Palette.accent.color.opacity(0.25) : .clear
+    }
+
+    // MARK: Outliner context menu
+
+    @ViewBuilder
+    private func rowContextMenu(_ row: OutlinerModel.Row) -> some View {
+        Button("Rename") { beginRename(row.path) }
+        Button("Duplicate") { document?.duplicate(row.path) }
+
+        if selection.paths.count >= 2 {
+            Button("Group Selection") { document?.groupSelection() }
+        }
+        if row.path.depth > 1 {
+            Button("Move to Root") { document?.reparent(row.path, under: nil) }
+        }
+
+        Divider()
+
+        if row.visibility == .invisible {
+            Button("Show") { document?.setVisibility(row.path, .inherited) }
+        } else {
+            Button("Hide") { document?.setVisibility(row.path, .invisible) }
+        }
+        Button(row.isActive ? "Disable" : "Enable") {
+            document?.setActive(row.path, !row.isActive)
+        }
+
+        Divider()
+
+        Button("Delete", role: .destructive) { document?.delete(row.path) }
+    }
+
+    // MARK: Inline rename
+
+    private func beginRename(_ path: PrimPath) {
+        renameText = path.name
+        renameTarget = path
+    }
+
+    private func commitRename() {
+        if let path = renameTarget { document?.rename(path, to: renameText) }
+        cancelRename()
+    }
+
+    private func cancelRename() {
+        renameTarget = nil
+        renameText = ""
+    }
+
+    // MARK: Drag-and-drop reparenting
+
+    /// Reparents each dragged path (encoded as its string description) under
+    /// `newParent` (root when `nil`). Returns whether anything moved.
+    private func reparentDropped(_ items: [String], under newParent: PrimPath?) -> Bool {
+        guard let document else { return false }
+        var moved = false
+        for item in items {
+            guard let path = PrimPath(item) else { continue }
+            document.reparent(path, under: newParent)
+            moved = true
+        }
+        dropTarget = nil
+        return moved
     }
 
     private func toggleCollapsed(_ path: PrimPath) {
