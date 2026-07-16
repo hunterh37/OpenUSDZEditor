@@ -42,6 +42,7 @@ check Packages/DicyaninDesignSystem/Sources  ""
 check Packages/EditorUI/Sources              "USDCore USDBridge ConversionKit ViewportKit EditingKit ValidationKit ScriptingKit DicyaninDesignSystem"
 check App/Sources                            "USDCore USDBridge ConversionKit ViewportKit EditingKit ValidationKit ScriptingKit EditorUI DicyaninDesignSystem"
 check CLI/Sources                            "USDCore USDBridge ConversionKit ValidationKit ScriptingKit EditingKit"  # never EditorUI/DesignSystem
+check Tools/EditorHarness/Sources            "USDCore USDBridge EditingKit EditorUI"  # dev tool: drives the real UI, so EditorUI is allowed
 
 if [[ $FAILURES -gt 0 ]]; then
   echo "dependency-lint: $FAILURES violation(s)"

@@ -4,3 +4,4 @@ DerivedData/
 *.xcworkspace/xcuserdata/
 Resources/Python/runtime/
 .venv/
+.harness-out/

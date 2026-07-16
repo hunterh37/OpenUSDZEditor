@@ -20,6 +20,7 @@ PACKAGES=(
   Packages/ViewportKit
   Packages/EditorUI
   CLI
+  Tools/EditorHarness
 )
 
 for pkg in "${PACKAGES[@]}"; do

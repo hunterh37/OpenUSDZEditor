@@ -1,0 +1,37 @@
+{
+  "name": "material-editing",
+  "open": "Tests/Fixtures/material-shader.usda",
+  "steps": [
+    { "do": "select", "path": "/Car/Body" },
+
+    { "do": "expect", "surfacePath": "/Looks/Paint/Surface" },
+    { "do": "expect", "materialInput": "roughness", "number": 0.4 },
+    { "do": "expect", "materialInput": "metallic", "isNull": true },
+    { "do": "shot", "name": "1-opened", "tab": "material" },
+
+    { "do": "material.set", "input": "roughness", "number": 0.9 },
+    { "do": "expect", "materialInput": "roughness", "number": 0.9 },
+    { "do": "shot", "name": "2-roughness-set", "tab": "material" },
+
+    { "do": "undo" },
+    { "do": "expect", "materialInput": "roughness", "number": 0.4 },
+
+    { "do": "material.set", "input": "metallic", "number": 1 },
+    { "do": "expect", "materialInput": "metallic", "number": 1 },
+    { "do": "undo" },
+    { "do": "expect", "materialInput": "metallic", "isNull": true },
+
+    { "do": "material.set", "input": "diffuseColor", "color": [0.1, 0.2, 0.9] },
+    { "do": "expect", "materialInput": "diffuseColor", "color": [0.1, 0.2, 0.9] },
+    { "do": "shot", "name": "3-recolored", "tab": "material" },
+
+    { "do": "material.clear", "input": "diffuseColor" },
+    { "do": "expect", "materialInput": "diffuseColor", "isNull": true },
+    { "do": "undo" },
+    { "do": "expect", "materialInput": "diffuseColor", "color": [0.1, 0.2, 0.9] },
+
+    { "do": "select", "path": "/Car/Body/Trim" },
+    { "do": "expect", "surfacePath": "/Looks/Paint/Surface" },
+    { "do": "dump" }
+  ]
+}

@@ -1,0 +1,276 @@
+import Foundation
+import SwiftUI
+import USDCore
+import EditingKit
+import EditorUI
+
+/// Runs a `Scenario` against the **real** `EditorDocument` and the **real**
+/// SwiftUI panels — the same types the app builds — and records what happened.
+///
+/// The harness deliberately drives the document rather than synthesising mouse
+/// events: an `EditorDocument` mutation is exactly what a click on the inspector
+/// produces (the views are thin bindings over these methods), and it needs no
+/// window, no focus, and no accessibility permissions. What the views *look* like
+/// is captured separately, by rendering them offscreen (`shot`).
+@MainActor
+final class Driver {
+    private var document: EditorDocument?
+    private let outputDirectory: URL
+    private let baseDirectory: URL
+    /// Human-readable log of every step, printed and written to the run report.
+    private(set) var transcript: [String] = []
+    private(set) var shots: [URL] = []
+
+    init(outputDirectory: URL, baseDirectory: URL) {
+        self.outputDirectory = outputDirectory
+        self.baseDirectory = baseDirectory
+    }
+
+    func run(_ scenario: Scenario) async throws {
+        let stageURL = resolve(scenario.open)
+        let snapshot = try await StageLoader.load(stageURL)
+        document = EditorDocument(snapshot: snapshot, modelURL: stageURL)
+        log("open \(stageURL.lastPathComponent) → \(snapshot.primCount) prims")
+
+        for (index, step) in scenario.steps.enumerated() {
+            try perform(step, index: index + 1)
+        }
+    }
+
+    // MARK: Steps
+
+    private func perform(_ step: Scenario.Step, index: Int) throws {
+        guard let document else {
+            throw HarnessError.stepFailed(step: index, verb: step.do, detail: "no open stage")
+        }
+        switch step.do {
+        case "select":
+            let path = try primPath(step.path, step: index, verb: step.do)
+            guard document.snapshot.prim(at: path) != nil else {
+                throw HarnessError.stepFailed(step: index, verb: step.do, detail: "no prim at \(path)")
+            }
+            document.selection = Selection([path])
+            log("select \(path)")
+
+        case "shot":
+            let name = step.name ?? "shot-\(index)"
+            let url = try shot(named: name, tab: step.tab, document: document)
+            shots.append(url)
+            log("shot \(name) → \(url.lastPathComponent)")
+
+        case "material.set":
+            let (input, material) = try materialTarget(step, index: index, document: document)
+            let value = try attributeValue(step, input: input, index: index)
+            guard document.setMaterialInput(input, on: material, to: value) else {
+                throw HarnessError.stepFailed(
+                    step: index, verb: step.do,
+                    detail: "rejected \(input.name)=\(describe(value)) (illegal or unchanged)")
+            }
+            log("material.set \(input.name)=\(describe(value)) on \(material.name) → \(document.undoLabel ?? "?")")
+
+        case "material.clear":
+            let (input, material) = try materialTarget(step, index: index, document: document)
+            guard document.clearMaterialInput(input, on: material) else {
+                throw HarnessError.stepFailed(
+                    step: index, verb: step.do, detail: "\(input.name) was not authored")
+            }
+            log("material.clear \(input.name) on \(material.name)")
+
+        case "undo":
+            let n = step.count ?? 1
+            for _ in 0..<n {
+                let label = document.undoLabel
+                guard document.canUndo else {
+                    throw HarnessError.stepFailed(step: index, verb: step.do, detail: "nothing to undo")
+                }
+                document.undo()
+                log("undo \(label ?? "?")")
+            }
+
+        case "redo":
+            let n = step.count ?? 1
+            for _ in 0..<n {
+                let label = document.redoLabel
+                guard document.canRedo else {
+                    throw HarnessError.stepFailed(step: index, verb: step.do, detail: "nothing to redo")
+                }
+                document.redo()
+                log("redo \(label ?? "?")")
+            }
+
+        case "expect":
+            try expect(step, index: index, document: document)
+
+        case "dump":
+            log(StateDump.text(document))
+
+        default:
+            throw HarnessError.stepFailed(step: index, verb: step.do, detail: "unknown verb")
+        }
+    }
+
+    /// Assertions — what makes a scenario a pipeline rather than a demo. A
+    /// failure throws, and the run exits non-zero.
+    private func expect(_ step: Scenario.Step, index: Int, document: EditorDocument) throws {
+        if let inputName = step.materialInput {
+            let (input, material) = try materialTarget(
+                Scenario.Step(do: step.do, path: step.path, input: inputName),
+                index: index, document: document)
+            let actual = document.materialInput(input, on: material)
+
+            if step.isNull == true {
+                guard actual == nil else {
+                    throw HarnessError.expectationFailed(
+                        step: index,
+                        detail: "\(input.name) expected unauthored, got \(describe(actual!))")
+                }
+                log("expect \(input.name) unauthored ✓")
+                return
+            }
+            let wanted = try attributeValue(step, input: input, index: index)
+            guard let actual, Driver.matches(actual, wanted) else {
+                throw HarnessError.expectationFailed(
+                    step: index,
+                    detail: "\(input.name) expected \(precise(wanted)), got \(actual.map(precise) ?? "unauthored")")
+            }
+            log("expect \(input.name) == \(describe(wanted)) ✓")
+            return
+        }
+        if let wanted = step.surfacePath {
+            let material = try resolvedMaterial(step, index: index, document: document)
+            guard material.surfacePath.description == wanted else {
+                throw HarnessError.expectationFailed(
+                    step: index,
+                    detail: "surfacePath expected \(wanted), got \(material.surfacePath)")
+            }
+            log("expect surfacePath == \(wanted) ✓")
+            return
+        }
+        throw HarnessError.stepFailed(step: index, verb: "expect", detail: "no expectation named")
+    }
+
+    // MARK: Resolution helpers
+
+    private func materialTarget(
+        _ step: Scenario.Step, index: Int, document: EditorDocument
+    ) throws -> (PreviewSurfaceInput, ResolvedMaterial) {
+        guard let name = step.input ?? step.materialInput,
+              let input = PreviewSurfaceInput.named(name) else {
+            throw HarnessError.stepFailed(
+                step: index, verb: step.do,
+                detail: "unknown input '\(step.input ?? step.materialInput ?? "")'")
+        }
+        return (input, try resolvedMaterial(step, index: index, document: document))
+    }
+
+    /// The material for the step's `path`, defaulting to the current selection —
+    /// resolved exactly as the inspector resolves it.
+    private func resolvedMaterial(
+        _ step: Scenario.Step, index: Int, document: EditorDocument
+    ) throws -> ResolvedMaterial {
+        let path: PrimPath
+        if let raw = step.path, let parsed = PrimPath(raw) {
+            path = parsed
+        } else if let primary = document.selection.primary {
+            path = primary
+        } else {
+            throw HarnessError.stepFailed(step: index, verb: step.do, detail: "no path and no selection")
+        }
+        guard let material = document.boundMaterial(for: path) else {
+            throw HarnessError.stepFailed(
+                step: index, verb: step.do, detail: "no material bound to \(path)")
+        }
+        return material
+    }
+
+    private func attributeValue(
+        _ step: Scenario.Step, input: PreviewSurfaceInput, index: Int
+    ) throws -> AttributeValue {
+        if let color = step.color {
+            guard color.count == 3 else {
+                throw HarnessError.stepFailed(step: index, verb: step.do, detail: "color needs 3 components")
+            }
+            return .vector(color)
+        }
+        if let number = step.number {
+            // `useSpecularWorkflow` is the one int-typed input; JSON has one
+            // number type, so the catalog decides how to read it.
+            if case .choice = input.kind { return .int(Int(number)) }
+            return .double(number)
+        }
+        if let string = step.string { return .token(string) }
+        throw HarnessError.stepFailed(step: index, verb: step.do, detail: "no value given")
+    }
+
+    private func primPath(_ raw: String?, step: Int, verb: String) throws -> PrimPath {
+        guard let raw, let path = PrimPath(raw) else {
+            throw HarnessError.stepFailed(step: step, verb: verb, detail: "invalid path '\(raw ?? "")'")
+        }
+        return path
+    }
+
+    /// Absolute paths are used as-is; relative ones resolve against the
+    /// workspace root, so a scenario reads `Tests/Fixtures/car.usda` regardless
+    /// of where the scenario file itself lives or where the tool was invoked.
+    /// Falls back to the scenario's own directory outside a workspace.
+    private func resolve(_ path: String) -> URL {
+        if path.hasPrefix("/") { return URL(fileURLWithPath: path) }
+        let root = RepoRoot.find(hint: baseDirectory) ?? baseDirectory
+        return root.appendingPathComponent(path).standardizedFileURL
+    }
+
+    // MARK: Capture
+
+    /// Renders the real `InspectorView` for the current document state.
+    private func shot(named name: String, tab: String?, document: EditorDocument) throws -> URL {
+        let resolvedTab = InspectorView.Tab(rawValue: (tab ?? "prim").capitalized) ?? .prim
+        let url = outputDirectory.appendingPathComponent("\(name).png")
+        try Render.png(
+            InspectorView(document: document, initialTab: resolvedTab),
+            size: CGSize(width: 320, height: 720),
+            to: url)
+        return url
+    }
+
+    /// Compares an expectation against a stage value with float tolerance.
+    ///
+    /// USD stores these inputs as 32-bit floats, so a `0.4` authored in a `.usda`
+    /// arrives as `0.4000000059604645`. Exact `==` on doubles would make every
+    /// numeric expectation unwritable — the tolerance is the point, not a
+    /// shortcut. It's set an order of magnitude above float32 epsilon and far
+    /// below any value a human would author.
+    static func matches(_ actual: AttributeValue, _ wanted: AttributeValue, tolerance: Double = 1e-6) -> Bool {
+        switch (actual, wanted) {
+        case let (.double(a), .double(b)):
+            return abs(a - b) <= tolerance
+        case let (.vector(a), .vector(b)):
+            return a.count == b.count && zip(a, b).allSatisfy { abs($0 - $1) <= tolerance }
+        default:
+            return actual == wanted
+        }
+    }
+
+    /// Full-precision rendering, for failure messages. `%g` rounds 0.4000000059
+    /// to "0.4", which turns a real mismatch into "expected 0.4, got 0.4".
+    private func precise(_ value: AttributeValue) -> String {
+        switch value {
+        case .double(let d): return String(format: "%.9g", d)
+        case .vector(let v): return "(" + v.map { String(format: "%.9g", $0) }.joined(separator: ", ") + ")"
+        default: return describe(value)
+        }
+    }
+
+    private func describe(_ value: AttributeValue) -> String {
+        switch value {
+        case .double(let d): return String(format: "%g", d)
+        case .int(let i): return String(i)
+        case .vector(let v): return "(" + v.map { String(format: "%.3f", $0) }.joined(separator: ", ") + ")"
+        default: return "\(value)"
+        }
+    }
+
+    private func log(_ line: String) {
+        transcript.append(line)
+        print(line)
+    }
+}
