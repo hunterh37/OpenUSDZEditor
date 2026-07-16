@@ -47,6 +47,23 @@ def attribute_payload(attr):
     return out
 
 
+def relationship_payload(rel):
+    # Targets are Sdf paths; property targets (e.g. a connection to
+    # </Looks/M/Surface.outputs:surface>) are pruned to their prim path so the
+    # editor's PrimPath can hold them. A relationship whose targets are all
+    # unusable still ships, with an empty target list, rather than vanishing.
+    targets = []
+    for path in rel.GetTargets():
+        prim_path = path.GetPrimPath()
+        if prim_path and not prim_path.isEmpty:
+            targets.append(str(prim_path))
+    return {
+        "name": rel.GetName(),
+        "targets": targets,
+        "uniform": True,  # relationships are always uniform in USD
+    }
+
+
 def prim_payload(prim):
     from pxr import Usd, UsdGeom
     payload = {
@@ -55,6 +72,13 @@ def prim_payload(prim):
         "active": prim.IsActive(),
         "visibility": "inherited",
         "attributes": [attribute_payload(a) for a in prim.GetAttributes()],
+        # Relationships carry material:binding and skel:skeleton — without them
+        # the inspector can't tell which material a mesh renders with. Authored
+        # only: GetRelationships() also returns unauthored schema built-ins
+        # (every Imageable declares proxyPrim), which would show the user a
+        # wall of empty rows for opinions the file doesn't hold.
+        "relationships": [relationship_payload(r)
+                          for r in prim.GetAuthoredRelationships()],
         "metadata": {},
         "variantSets": [],
         # Include inactive prims: they must stay inspectable in the outliner

@@ -27,12 +27,18 @@ struct SnapshotDTO: Decodable {
         var variants: [String]
         var selection: String?
     }
+    struct RelationshipDTO: Decodable {
+        var name: String
+        var targets: [String]?
+        var uniform: Bool?
+    }
     struct PrimDTO: Decodable {
         var path: String
         var type: String?
         var active: Bool?
         var visibility: String?
         var attributes: [AttributeDTO]?
+        var relationships: [RelationshipDTO]?
         var metadata: [String: String]?
         var variantSets: [VariantSetDTO]?
         var children: [PrimDTO]?
@@ -99,11 +105,26 @@ public enum StageSnapshotDecoder {
             isActive: dto.active ?? true,
             visibility: visibility,
             attributes: try (dto.attributes ?? []).map(attribute(from:)),
+            relationships: try (dto.relationships ?? []).map(relationship(from:)),
             metadata: dto.metadata ?? [:],
             variantSets: (dto.variantSets ?? []).map {
                 VariantSet(name: $0.name, variants: $0.variants, selection: $0.selection)
             },
             children: children)
+    }
+
+    /// Decodes a relationship, e.g. `material:binding` or `skel:skeleton`.
+    ///
+    /// The Python side already prunes property targets down to prim paths, but a
+    /// malformed target is still possible from a hand-edited layer; those are
+    /// dropped rather than failing the whole open, since a bad relationship
+    /// target shouldn't cost the user the file (specs/usd-bridge.md — degrade,
+    /// never lose data).
+    private static func relationship(from dto: SnapshotDTO.RelationshipDTO) throws -> Relationship {
+        Relationship(
+            name: dto.name,
+            targets: (dto.targets ?? []).compactMap(PrimPath.init),
+            isUniform: dto.uniform ?? true)
     }
 
     private static func attribute(from dto: SnapshotDTO.AttributeDTO) throws -> Attribute {

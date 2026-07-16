@@ -73,6 +73,40 @@ struct DecoderValidTests {
         let stage = try StageSnapshotDecoder.decode(json(#"{"metadata":{"upAxis":"Z"},"prims":[]}"#))
         #expect(stage.metadata.upAxis == .z)
     }
+
+    @Test func decodesRelationships() throws {
+        // material:binding is how the inspector finds a mesh's material; before
+        // the payload carried relationships, no real file could resolve one.
+        let stage = try StageSnapshotDecoder.decode(json(
+            #"{"prims":[{"path":"/Mesh","relationships":[{"name":"material:binding","targets":["/Looks/Paint"],"uniform":true}]}]}"#))
+        let prim = try #require(stage.prim(at: PrimPath("/Mesh")!))
+        let binding = try #require(prim.relationships.first)
+        #expect(binding.name == "material:binding")
+        #expect(binding.targets == [PrimPath("/Looks/Paint")!])
+        #expect(binding.isUniform)
+    }
+
+    @Test func relationshipsDefaultToEmptyAndUniform() throws {
+        let stage = try StageSnapshotDecoder.decode(json(
+            #"{"prims":[{"path":"/A","relationships":[{"name":"rel"}]}]}"#))
+        let rel = try #require(stage.prim(at: PrimPath("/A")!)?.relationships.first)
+        #expect(rel.targets.isEmpty)
+        #expect(rel.isUniform)   // relationships are always uniform in USD
+    }
+
+    @Test func primWithoutRelationshipsKeyDecodes() throws {
+        // Payloads predating the relationships field must still open.
+        let stage = try StageSnapshotDecoder.decode(json(#"{"prims":[{"path":"/A"}]}"#))
+        #expect(stage.prim(at: PrimPath("/A")!)?.relationships.isEmpty == true)
+    }
+
+    @Test func malformedRelationshipTargetIsDroppedNotFatal() throws {
+        // A hand-edited layer shouldn't cost the user the whole file.
+        let stage = try StageSnapshotDecoder.decode(json(
+            #"{"prims":[{"path":"/A","relationships":[{"name":"rel","targets":["not a path","/B"]}]}]}"#))
+        let rel = try #require(stage.prim(at: PrimPath("/A")!)?.relationships.first)
+        #expect(rel.targets == [PrimPath("/B")!])
+    }
 }
 
 @Suite("StageSnapshotDecoder — malformed payloads")
