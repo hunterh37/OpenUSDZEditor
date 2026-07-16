@@ -97,6 +97,10 @@ public protocol USDStageMutable: USDStageProtocol {
 /// enumerated now so the command layer has a stable vocabulary).
 public enum StageMutation: Hashable, Sendable {
     case setAttribute(path: PrimPath, attribute: Attribute)
+    /// Removes the named attribute from the prim at `path`. Absent attributes are
+    /// tolerated (idempotent), so this is the clean inverse of `setAttribute` when
+    /// the attribute did not exist beforehand.
+    case removeAttribute(path: PrimPath, name: String)
     case setVisibility(path: PrimPath, visibility: Visibility)
     case setActive(path: PrimPath, isActive: Bool)
     case renamePrim(path: PrimPath, newName: String)

@@ -11,6 +11,23 @@ extension ColorToken {
     }
 }
 
+/// A small accent-tinted tag — `uniform`, `anim`, `default` — used to annotate
+/// inspector rows.
+struct Badge: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: TypeScale.caption, weight: .semibold))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(RoundedRectangle(cornerRadius: 3).fill(Palette.accent.color.opacity(0.2)))
+            .foregroundStyle(Palette.accent.color)
+    }
+}
+
 /// A titled panel section: a small uppercase caption over its content, matching
 /// the enterprise-restrained inspector look.
 struct PanelSection<Content: View>: View {

@@ -105,9 +105,43 @@ public struct SetAttributeCommand: EditCommand {
     public func undo(on stage: any USDStageMutable) throws {
         if let oldAttribute {
             try stage.apply(.setAttribute(path: path, attribute: oldAttribute))
+        } else {
+            // The attribute was newly authored by `execute`; undo removes it so
+            // the prim returns to carrying no opinion at all (rather than an
+            // opinion equal to the schema fallback, which is not the same thing).
+            try stage.apply(.removeAttribute(path: path, name: newAttribute.name))
         }
-        // NB: when the attribute was newly authored there is no removeAttribute
-        // mutation yet; undo is a no-op until that vocabulary lands (Phase 3).
+    }
+}
+
+/// Remove an authored attribute from a prim, returning it to carrying no
+/// opinion (its schema fallback then applies). The inverse of
+/// `SetAttributeCommand`; the removed attribute is captured so undo restores it
+/// with its qualifiers and time samples intact.
+public struct RemoveAttributeCommand: EditCommand {
+    public let path: PrimPath
+    public let removed: Attribute
+
+    /// Builds the command, or `nil` when the prim carries no such attribute
+    /// (nothing to remove — and nothing undo could restore).
+    public static func make(path: PrimPath, name: String, in stage: any USDStageProtocol) -> RemoveAttributeCommand? {
+        guard let attribute = stage.prim(at: path)?.attribute(named: name) else { return nil }
+        return RemoveAttributeCommand(path: path, removed: attribute)
+    }
+
+    public init(path: PrimPath, removed: Attribute) {
+        self.path = path
+        self.removed = removed
+    }
+
+    public var label: String { "Clear \(removed.name)" }
+
+    public func execute(on stage: any USDStageMutable) throws {
+        try stage.apply(.removeAttribute(path: path, name: removed.name))
+    }
+
+    public func undo(on stage: any USDStageMutable) throws {
+        try stage.apply(.setAttribute(path: path, attribute: removed))
     }
 }
 

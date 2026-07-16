@@ -3,23 +3,33 @@ import USDCore
 import EditingKit
 import DicyaninDesignSystem
 
-/// The inspector. Read-only surfacing landed in Phase 1; Phase 3 makes the
-/// prim, transform, and stage tabs *editable*, routing every change through the
-/// document's `CommandStack` so edits are undoable. Material editing stays
-/// read-only until its own roadmap slice.
-struct InspectorView: View {
+/// The inspector. Read-only surfacing landed in Phase 1; Phase 3 makes every
+/// tab *editable*, routing each change through the document's `CommandStack` so
+/// edits are undoable. The Material tab's controls live in `MaterialEditor`.
+///
+/// Public so the offscreen harness (`Tools/EditorHarness`) can render a single
+/// panel state without standing up the whole shell — the panel-snapshot layer in
+/// specs/testing.md.
+public struct InspectorView: View {
     /// nil when no file is open — the tabs then render empty states.
     let document: EditorDocument?
 
-    enum Tab: String, CaseIterable, Identifiable {
+    public enum Tab: String, CaseIterable, Identifiable, Sendable {
         case prim = "Prim"
         case transform = "Transform"
         case material = "Material"
         case stage = "Stage"
-        var id: String { rawValue }
+        public var id: String { rawValue }
     }
 
-    @State private var tab: Tab = .prim
+    @State private var tab: Tab
+
+    /// - Parameter initialTab: the tab shown on first render. The user's clicks
+    ///   take over from there; this only seeds it.
+    public init(document: EditorDocument?, initialTab: Tab = .prim) {
+        self.document = document
+        _tab = State(initialValue: initialTab)
+    }
 
     private var stage: (any USDStageProtocol)? { document?.snapshot }
     private var selection: Selection { document?.selection ?? .empty }
@@ -29,7 +39,7 @@ struct InspectorView: View {
         return stage.prim(at: path)
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Picker("", selection: $tab) {
                 ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
@@ -166,29 +176,16 @@ struct InspectorView: View {
         }
     }
 
-    // MARK: Material (read-only until its own slice)
+    // MARK: Material
 
     @ViewBuilder
     private var materialTab: some View {
-        if let prim {
-            let binding = prim.relationships.first { $0.name.contains("material:binding") }
-            let shaderAttrs = prim.attributes.filter { $0.name.hasPrefix("inputs:") }
-            if binding == nil && shaderAttrs.isEmpty {
-                emptyState("No material binding or shader inputs on this prim.")
+        if let document, let prim {
+            if let material = document.boundMaterial(for: prim.path) {
+                MaterialEditor(document: document, material: material, selected: prim.path)
+                    .id(material.surfacePath)
             } else {
-                if let binding {
-                    PanelSection(title: "Binding") {
-                        FieldRow(label: "material", value: binding.targets.map(\.description).joined(separator: ", "))
-                    }
-                }
-                if !shaderAttrs.isEmpty {
-                    PanelSection(title: "Shader Inputs") {
-                        ForEach(shaderAttrs, id: \.name) { attr in
-                            FieldRow(label: attr.name.replacingOccurrences(of: "inputs:", with: ""),
-                                     value: ValueFormatter.string(attr.value))
-                        }
-                    }
-                }
+                emptyState("No material bound to \(prim.name).")
             }
         } else {
             emptyState("No selection")
@@ -264,14 +261,7 @@ struct InspectorView: View {
 
     // MARK: Helpers
 
-    private func badge(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: TypeScale.caption, weight: .semibold))
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background(RoundedRectangle(cornerRadius: 3).fill(Palette.accent.color.opacity(0.2)))
-            .foregroundStyle(Palette.accent.color)
-    }
+    private func badge(_ text: String) -> some View { Badge(text) }
 
     private func emptyState(_ text: String) -> some View {
         Text(text)
@@ -284,7 +274,8 @@ struct InspectorView: View {
 // MARK: - Editable field building blocks
 
 /// A label + trailing editor laid out like `FieldRow`, for interactive controls.
-private struct LabeledField<Content: View>: View {
+// (internal: shared with MaterialEditor.swift)
+struct LabeledField<Content: View>: View {
     let label: String
     @ViewBuilder var content: Content
 
@@ -336,7 +327,8 @@ private struct NameField: View {
 }
 
 /// A numeric text field committing a Double on submit/blur; reverts on garbage.
-private struct DoubleField: View {
+// (internal: shared with MaterialEditor.swift)
+struct DoubleField: View {
     let value: Double
     let commit: (Double) -> Void
 

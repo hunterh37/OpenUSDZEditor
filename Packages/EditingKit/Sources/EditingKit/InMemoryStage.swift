@@ -57,6 +57,10 @@ public final class InMemoryStage: USDStageMutable, @unchecked Sendable {
                         prim.attributes.append(attribute)
                     }
                 }
+            case let .removeAttribute(path, name):
+                try mutate(at: path) { prim in
+                    prim.attributes.removeAll { $0.name == name }
+                }
             case let .setVisibility(path, visibility):
                 try mutate(at: path) { $0.visibility = visibility }
             case let .setActive(path, isActive):

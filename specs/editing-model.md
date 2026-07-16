@@ -20,7 +20,8 @@ public protocol EditCommand {
 | Command | Notes |
 |---|---|
 | `SetTransformCommand` | TRS on Xformable; gizmo drags coalesce by key `transform:<path>` |
-| `SetAttributeCommand` | generic typed attribute set; captures prior value for undo |
+| `SetAttributeCommand` | generic typed attribute set; captures prior value for undo (undo *removes* the attribute when it was previously unauthored) |
+| `RemoveAttributeCommand` | un-authors an attribute so its schema fallback applies again; captures the removed attribute (qualifiers + time samples) for undo. Backs "revert to default" in the material inspector |
 | `RenamePrimCommand` | validates USD name legality; updates selection |
 | `ReparentPrimCommand` | preserves world transform option (recomputes local xform against new parent) |
 | `SetTransformCommand` on child prims | works at any depth of the hierarchy; if the prim isn't Xformable (bare Mesh), an Xform op is authored on it directly — moving a wheel inside a car "just works" |
@@ -29,11 +30,37 @@ public protocol EditCommand {
 | `SetActiveCommand` | Disable part: `active = false` — prim excluded from composition and from export (distinct from Hide; UI copy makes the difference explicit) |
 | `CreatePrimCommand` | Xform/Scope/Material creation |
 | `SetMaterialBindingCommand` | mesh ↔ material |
-| `SetMaterialInputCommand` | PreviewSurface param incl. texture path swap |
+| `SetMaterialInputCommand` | PreviewSurface param, gated on the `PreviewSurfaceInput` catalog (mutation rule 0 — the catalog *is* the RealityKit-supported subset). Values are clamped into the input's declared range, then rejected if they still don't match its type. Targets the `ResolvedMaterial.surfacePath`, never a raw path (see Material Resolution). Texture path swap awaits `UsdUVTexture` authoring |
 | `SetVariantSelectionCommand` | variant switching (undoable) |
 | `SetStageMetadataCommand` | upAxis, metersPerUnit, defaultPrim… |
 | `ScaleFixCommand` | composite: computes uniform scale to target size |
 | `CompositeCommand` | ordered children, single undo entry (used by scripts & quick-fixes) |
+
+## Material Resolution
+
+Material editing never takes a raw prim path. `MaterialBinding.resolve(for:in:)`
+returns a `ResolvedMaterial` — the bound `Material` prim (the user-facing
+identity, used for undo labels) plus the `surfacePath` its `inputs:*` actually
+live on — and the commands take that. Three shapes have to agree:
+
+1. **Binding spelling.** The bridge surfaces a real `material:binding`
+   relationship; `USDAuthorStage` records a bare sanitized name in prim
+   metadata. Both resolve.
+2. **Inheritance.** UsdShade bindings inherit down namespace, so resolution
+   walks ancestors — selecting `/Car/Body/Trim` edits the material it renders
+   with, and the closest binding wins. A prim inside a `Material` (i.e. its
+   shader) resolves to that material rather than dead-ending.
+3. **Where inputs live.** Real files author a `Shader` child
+   (`info:id = "UsdPreviewSurface"`) that carries the inputs, with the Material
+   only routing it via `outputs:surface`; our own importer flattens the inputs
+   onto the Material prim. `surfacePath` picks the preview-surface shader when
+   there is one and the Material otherwise. **This distinction is load-bearing:
+   authoring `inputs:*` onto the Material prim when a shader owns them is
+   silently inert — RealityKit renders the shader's opinion.**
+
+`outputs:surface` connections aren't modelled in the snapshot yet, so a material
+with several preview surfaces resolves to the first in depth-first order.
+Modelling connections is the fix when a file in the wild needs it.
 
 ## Undo Integration
 

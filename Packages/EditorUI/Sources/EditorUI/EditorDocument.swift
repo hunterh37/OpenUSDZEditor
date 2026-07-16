@@ -191,6 +191,45 @@ public final class EditorDocument {
             newSelection: selection, oldSelection: variantSet.selection))
     }
 
+    // MARK: Material edits
+
+    /// The material bound to `path` and the prim its inputs live on — following
+    /// the binding up the namespace, so selecting a deep child part shows the
+    /// material it actually renders with. `nil` when nothing in the chain binds
+    /// one.
+    public func boundMaterial(for path: PrimPath) -> ResolvedMaterial? {
+        MaterialBinding.resolve(for: path, in: snapshot)
+    }
+
+    /// The authored value of `input` on `material`'s surface, or `nil` when it
+    /// carries no opinion (the inspector then shows `input.fallback`).
+    public func materialInput(_ input: PreviewSurfaceInput, on material: ResolvedMaterial) -> AttributeValue? {
+        snapshot.prim(at: material.surfacePath)?.attribute(named: input.attributeName)?.value
+    }
+
+    /// Sets a UsdPreviewSurface input on a material as one undoable command.
+    /// No-op when the value is unchanged or illegal for the input's declared
+    /// type. Returns `true` when an edit ran.
+    @discardableResult
+    public func setMaterialInput(
+        _ input: PreviewSurfaceInput,
+        on material: ResolvedMaterial,
+        to value: AttributeValue
+    ) -> Bool {
+        guard let command = SetMaterialInputCommand.make(
+            material, input: input, value: value, in: snapshot) else { return false }
+        return run(command) != nil
+    }
+
+    /// Clears an authored input so the material falls back to the USD default,
+    /// undoably. Returns `true` when the input was authored and got removed.
+    @discardableResult
+    public func clearMaterialInput(_ input: PreviewSurfaceInput, on material: ResolvedMaterial) -> Bool {
+        guard let command = RemoveAttributeCommand.make(
+            path: material.surfacePath, name: input.attributeName, in: snapshot) else { return false }
+        return run(command) != nil
+    }
+
     // MARK: Scale / units
 
     /// Normalizes the stage's `metersPerUnit` to `target`, preserving real-world
