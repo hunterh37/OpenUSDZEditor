@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import USDCore
+import USDBridge
 import EditingKit
 import ValidationKit
 
@@ -36,6 +37,15 @@ public final class EditorDocument {
 
     /// Snapping shared by the numeric inspector fields and the viewport gizmo.
     public var snap: SnapSettings = .off
+
+    /// Live mesh edit-mode state; `nil` in object mode (Phase 6,
+    /// specs/mesh-editing.md). Managed by `EditorDocument+MeshEdit.swift`.
+    public var meshEdit: MeshEditState?
+
+    /// The mesh prim most recently committed by an edit session — after
+    /// commit, the stage (not the file) is the viewport's source of truth for
+    /// this prim's geometry, including across undo/redo.
+    public var lastMeshEditPath: PrimPath?
 
     /// Bumped on every stack change so the menu can observe undo/redo enablement.
     public private(set) var revision: Int = 0
@@ -255,6 +265,24 @@ public final class EditorDocument {
     public func applyQuickFix(for diagnostic: Diagnostic) -> Bool {
         guard let fix = quickFix(for: diagnostic) else { return false }
         return run(fix.command) != nil
+    }
+
+    // MARK: Save
+
+    /// The stack revision last flushed to disk; `revision != savedRevision`
+    /// means unsaved changes ("Edited" in the title bar).
+    public private(set) var savedRevision: Int = 0
+
+    public var hasUnsavedChanges: Bool { revision != savedRevision }
+
+    /// Writes the current stage to `url` (.usda/.usd pure Swift; .usdc/.usdz
+    /// via the bridge). Throws `StageSaver.SaveError` / bridge errors — the
+    /// caller surfaces them; a failed save never clobbers the existing file.
+    public func save(to url: URL, executor: ProcessBridgeExecutor?) async throws {
+        // Flush a live edit session first so what's on screen is what's saved.
+        if meshEdit != nil { exitMeshEditMode(commit: true) }
+        try await StageSaver.save(snapshot, to: url, executor: executor)
+        savedRevision = revision
     }
 
     // MARK: Private

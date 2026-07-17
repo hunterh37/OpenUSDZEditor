@@ -303,6 +303,15 @@ public struct EditorShellView: View {
         return moved
     }
 
+    /// Tab toggles object ⇄ edit mode against the current selection
+    /// (specs/mesh-editing.md §Component mode).
+    private var editModeToggleShortcut: some View {
+        Button("") { document?.toggleMeshEditMode() }
+            .keyboardShortcut(.tab, modifiers: [])
+            .opacity(0)
+            .allowsHitTesting(false)
+    }
+
     private func toggleCollapsed(_ path: PrimPath) {
         if collapsed.contains(path) {
             collapsed.remove(path)
@@ -325,7 +334,18 @@ public struct EditorShellView: View {
     @ViewBuilder
     private var viewport: some View {
         if let modelURL {
-            ViewportPane(modelURL: modelURL)
+            ViewportPane(
+                modelURL: modelURL,
+                editedMesh: document?.viewportEditedMesh,
+                onPickFace: { [weak document] index in document?.pickMeshFace(index: index) },
+                hoverPreview: document?.meshEdit?.hoverPreviewEnabled ?? false,
+                onHoverFace: { [weak document] index in document?.hoverMeshFace(index: index) })
+                .overlay {
+                    // Mesh edit mode: tool strip + active-tool indicator over
+                    // the viewport (Phase 6; specs/mesh-editing.md).
+                    if let document { MeshEditOverlay(document: document) }
+                }
+                .background(editModeToggleShortcut)
         } else {
             ZStack {
                 Palette.viewportBackground.color
