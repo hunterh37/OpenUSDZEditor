@@ -148,3 +148,59 @@ struct MeshEditModeTests {
         #expect(counts == [4]) // stage untouched
     }
 }
+
+@MainActor
+@Suite("Bevel tool (EditorDocument)")
+struct BevelToolTests {
+
+    /// Extruding the quad gives a cap whose edges satisfy bevel's strict
+    /// preconditions (interior edge, valence-3 endpoints).
+    @MainActor
+    private func extrudedDoc() -> (EditorDocument, capEdge: EdgeKey) {
+        let (doc, path) = makeDocument()
+        doc.enterMeshEditMode(at: path)
+        doc.meshEdit?.tool = .extrude
+        doc.meshEdit?.extrudeDistance = 0.5
+        doc.meshEdit?.componentSelection = .faces([FaceID(0)])
+        doc.applyActiveMeshTool()
+        let cap = doc.meshEdit!.session.mesh.faceLoops[FaceID(0)]!
+        return (doc, EdgeKey(cap[0], cap[1]))
+    }
+
+    @Test func bevelAppliesToEdgeSelection() {
+        let (doc, capEdge) = extrudedDoc()
+        doc.meshEdit?.tool = .bevel
+        doc.meshEdit?.bevelWidth = 0.1
+        doc.meshEdit?.componentSelection = .edges([capEdge])
+        doc.applyActiveMeshTool()
+        #expect(doc.meshEdit?.lastDiagnostic == nil)
+        #expect(doc.meshEdit?.session.mesh.faceCount == 6) // + bevel quad
+        // Result selection is the new quad (faces), so it highlights in viewport.
+        if case .faces(let f)? = doc.meshEdit?.componentSelection {
+            #expect(f.count == 1)
+        } else { Issue.record("expected face selection after bevel") }
+    }
+
+    @Test func edgePickerSelectsAndClamps() {
+        let (doc, _) = extrudedDoc()
+        doc.meshEdit?.tool = .bevel
+        let edges = doc.meshEditEdges
+        #expect(!edges.isEmpty)
+        doc.selectMeshEdge(index: 999)
+        #expect(doc.meshEdit?.selectedEdgeIndex == edges.count - 1)
+        if case .edges(let picked)? = doc.meshEdit?.componentSelection {
+            #expect(picked == [edges.last!])
+        } else { Issue.record("edge picker did not set edge selection") }
+    }
+
+    @Test func bevelRefusalIsLoud() {
+        let (doc, path) = makeDocument()
+        doc.enterMeshEditMode(at: path) // flat quad: every edge is boundary
+        doc.meshEdit?.tool = .bevel
+        let edge = doc.meshEditEdges.first!
+        doc.meshEdit?.componentSelection = .edges([edge])
+        doc.applyActiveMeshTool()
+        #expect(doc.meshEdit?.lastDiagnostic != nil)
+        #expect(doc.meshEdit?.session.isDirty == false)
+    }
+}

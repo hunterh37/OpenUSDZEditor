@@ -299,6 +299,27 @@ public struct MeshEditOverlay: View {
                     paramField("Distance", value: Binding(
                         get: { document.meshEdit?.mergeDistance ?? 0.001 },
                         set: { document.meshEdit?.mergeDistance = $0 }))
+                case .bevel:
+                    paramField("Width", value: Binding(
+                        get: { document.meshEdit?.bevelWidth ?? 0.05 },
+                        set: { document.meshEdit?.bevelWidth = $0 }))
+                    let edgeCount = document.meshEditEdges.count
+                    let idx = document.meshEdit?.selectedEdgeIndex ?? 0
+                    Text("Edge \(min(idx, max(edgeCount - 1, 0)) + 1)/\(edgeCount)")
+                        .font(.system(size: TypeScale.caption, design: .monospaced))
+                        .foregroundStyle(Palette.textSecondary.color)
+                    Button { document.selectMeshEdge(index: idx - 1) } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Palette.textSecondary.color)
+                    .accessibilityIdentifier("meshEdit.edge.prev")
+                    Button { document.selectMeshEdge(index: idx + 1) } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Palette.textSecondary.color)
+                    .accessibilityIdentifier("meshEdit.edge.next")
                 case .delete, .fill:
                     Text("No parameters")
                         .font(.system(size: TypeScale.caption))

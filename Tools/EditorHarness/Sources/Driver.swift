@@ -126,6 +126,7 @@ final class Driver {
                 case .extrude: document.meshEdit?.extrudeDistance = number
                 case .inset: document.meshEdit?.insetFraction = number
                 case .merge: document.meshEdit?.mergeDistance = number
+                case .bevel: document.meshEdit?.bevelWidth = number
                 case .delete, .fill: break
                 }
             }

@@ -129,7 +129,3 @@ public enum ExtrudeFaces: MeshOp {
         return MeshOpResult(mesh: out, resultSelection: .faces(region), delta: predicted)
     }
 }
-
-extension EdgeKey {
-    static func < (l: EdgeKey, r: EdgeKey) -> Bool { (l.a, l.b) < (r.a, r.b) }
-}

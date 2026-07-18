@@ -9,7 +9,7 @@ import ViewportKit
 /// The component-level tools. Hotkeys follow Blender muscle memory:
 /// E extrude, I inset, X delete, M merge, F fill.
 public enum MeshTool: String, CaseIterable, Identifiable, Sendable {
-    case extrude, inset, delete, merge, fill
+    case extrude, inset, delete, merge, fill, bevel
 
     public var id: String { rawValue }
 
@@ -20,6 +20,7 @@ public enum MeshTool: String, CaseIterable, Identifiable, Sendable {
         case .delete: return "Delete"
         case .merge: return "Merge"
         case .fill: return "Fill Hole"
+        case .bevel: return "Bevel"
         }
     }
 
@@ -30,6 +31,7 @@ public enum MeshTool: String, CaseIterable, Identifiable, Sendable {
         case .delete: return "trash"
         case .merge: return "arrow.triangle.merge"
         case .fill: return "circle.grid.cross.fill"
+        case .bevel: return "pentagon"
         }
     }
 
@@ -40,6 +42,7 @@ public enum MeshTool: String, CaseIterable, Identifiable, Sendable {
         case .delete: return "x"
         case .merge: return "m"
         case .fill: return "f"
+        case .bevel: return "b"
         }
     }
 }
@@ -94,6 +97,9 @@ public struct MeshEditState {
     public var extrudeDistance: Double = 0.1
     public var insetFraction: Double = 0.2
     public var mergeDistance: Double = 0.001
+    public var bevelWidth: Double = 0.05
+    /// HUD edge-picker position (sorted edge order) for the Bevel tool.
+    public var selectedEdgeIndex: Int = 0
     /// Most recent op refusal / diagnostic for the HUD.
     public var lastDiagnostic: String?
 }
@@ -150,6 +156,24 @@ extension EditorDocument {
         meshEdit = state
     }
 
+    /// Sorted edge list backing the HUD edge-picker (deterministic order).
+    public var meshEditEdges: [EdgeKey] {
+        guard let state = meshEdit else { return [] }
+        return state.session.mesh.edgeFaceMap.keys.sorted(by: <)
+    }
+
+    /// HUD edge-picker: select the edge at `index` in sorted order (clamped).
+    public func selectMeshEdge(index: Int) {
+        guard var state = meshEdit else { return }
+        let edges = state.session.mesh.edgeFaceMap.keys.sorted(by: <)
+        guard !edges.isEmpty else { return }
+        let clamped = min(max(index, 0), edges.count - 1)
+        state.selectedEdgeIndex = clamped
+        state.componentSelection = .edges([edges[clamped]])
+        state.lastDiagnostic = nil
+        meshEdit = state
+    }
+
     /// Leaves edit mode; `commit` flushes the session to the stage as one
     /// undoable `MeshEditCommand` (spec: flush on leaving edit mode).
     public func exitMeshEditMode(commit: Bool = true) {
@@ -197,6 +221,19 @@ extension EditorDocument {
             case .fill:
                 result = try FillHole.apply(mesh, selection: state.componentSelection)
                 entry = "Fill Hole"
+            case .bevel:
+                // Bevel targets edges; if the current selection is faces (the
+                // default), resolve the HUD edge-picker choice instead.
+                var selection = state.componentSelection
+                if case .edges = selection {} else {
+                    let edges = mesh.edgeFaceMap.keys.sorted(by: <)
+                    guard !edges.isEmpty else { throw MeshOpError.emptySelection }
+                    let clamped = min(max(state.selectedEdgeIndex, 0), edges.count - 1)
+                    selection = .edges([edges[clamped]])
+                }
+                result = try BevelEdges.apply(mesh, selection: selection,
+                                              params: .init(width: state.bevelWidth))
+                entry = "Bevel"
             }
             state.session.record(result, journalEntry: entry)
             state.componentSelection = result.resultSelection

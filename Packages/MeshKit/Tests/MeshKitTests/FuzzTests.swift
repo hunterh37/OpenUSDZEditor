@@ -47,7 +47,7 @@ struct FuzzTests {
         for opIndex in 0..<3 {
             let result: MeshOpResult?
             do {
-                switch (Int(iteration) + opIndex) % 4 {
+                switch (Int(iteration) + opIndex) % 5 {
                 case 0:
                     result = try ExtrudeFaces.apply(mesh, selection: .faces(randomFaces(mesh, &rng)),
                                                     params: .init(distance: Double.random(in: 0.1...2, using: &rng)))
@@ -56,11 +56,17 @@ struct FuzzTests {
                                                   params: .init(fraction: Double.random(in: 0.05...0.95, using: &rng)))
                 case 2:
                     result = try DeleteComponents.apply(mesh, selection: .faces(randomFaces(mesh, &rng)))
-                default:
+                case 3:
                     result = try MergeVertices.apply(
                         mesh,
                         selection: .vertices(Set(mesh.positions.keys)),
                         params: .byDistance(Double.random(in: 0.01...0.5, using: &rng)))
+                default:
+                    let edges = Array(mesh.edgeFaceMap.keys).sorted(by: <)
+                    let pick = Set(edges.shuffled(using: &rng)
+                        .prefix(Int.random(in: 1...3, using: &rng)))
+                    result = try BevelEdges.apply(mesh, selection: .edges(pick),
+                                                  params: .init(width: Double.random(in: 0.01...0.6, using: &rng)))
                 }
             } catch is MeshOpError {
                 result = nil // loud precondition refusal is a valid outcome

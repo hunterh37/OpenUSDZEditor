@@ -223,3 +223,127 @@ struct RoundTripTests {
         #expect(snapshot == cube)
     }
 }
+
+@Suite("BevelEdges")
+struct BevelTests {
+
+    /// Cube's top-front edge (verts 4,5): faces top + front, both endpoints
+    /// face-valence 3 — the canonical bevel target.
+    private var topFrontEdge: EdgeKey { EdgeKey(VertexID(4), VertexID(5)) }
+
+    @Test func bevelCubeEdgeMatchesAnalyticVolume() throws {
+        let cube = Fixtures.cube()
+        let w = 0.25
+        let r = try BevelEdges.apply(cube, selection: .edges([topFrontEdge]),
+                                     params: .init(width: w))
+        // Per-edge delta: V+2, E+3, F+1 (spec table, analytic).
+        #expect(r.delta == TopologyDelta(vertices: 2, edges: 3, faces: 1))
+        #expect(r.mesh.vertexCount == 10)
+        #expect(r.mesh.edgeCount == 15)
+        #expect(r.mesh.faceCount == 7)
+        // Invariant 5: a right-triangle prism (legs w) is shaved off the edge.
+        #expect(abs(r.mesh.signedVolume - (1 - w * w / 2)) < 1e-12)
+        // Closed manifold stays closed and consistently wound.
+        #expect(MeshInvariants.violations(in: r.mesh, allowBoundaries: false).isEmpty)
+        // Result selection is the new bevel quad, with the analytic area w·√2 × 1.
+        guard case .faces(let quads) = r.resultSelection, quads.count == 1 else {
+            Issue.record("expected one new quad selected"); return
+        }
+        #expect(abs(r.mesh.faceArea(quads.first!) - w * 2.0.squareRoot()) < 1e-12)
+        // Old edge endpoints are gone.
+        #expect(r.mesh.positions[VertexID(4)] == nil)
+        #expect(r.mesh.positions[VertexID(5)] == nil)
+    }
+
+    @Test func bevelTwoDisjointEdges() throws {
+        let cube = Fixtures.cube()
+        let w = 0.2
+        let r = try BevelEdges.apply(
+            cube,
+            selection: .edges([EdgeKey(VertexID(4), VertexID(5)),
+                               EdgeKey(VertexID(6), VertexID(7))]),
+            params: .init(width: w))
+        #expect(r.delta == TopologyDelta(vertices: 4, edges: 6, faces: 2))
+        #expect(abs(r.mesh.signedVolume - (1 - w * w)) < 1e-12)
+        #expect(MeshInvariants.violations(in: r.mesh, allowBoundaries: false).isEmpty)
+    }
+
+    @Test func quadInheritsOnlySharedSubsets() throws {
+        var cube = Fixtures.cube()
+        let front = FaceID(2) // front face (import order)
+        cube.addFaceToSubset(Fixtures.cubeTop, subset: "both")
+        cube.addFaceToSubset(front, subset: "both")
+        cube.addFaceToSubset(Fixtures.cubeTop, subset: "topOnly")
+        let r = try BevelEdges.apply(cube, selection: .edges([topFrontEdge]),
+                                     params: .init(width: 0.1))
+        guard case .faces(let quads) = r.resultSelection, let quad = quads.first else {
+            Issue.record("no quad"); return
+        }
+        #expect(r.mesh.subsets["both"]?.contains(quad) == true)
+        #expect(r.mesh.subsets["topOnly"]?.contains(quad) != true)
+    }
+
+    @Test func refusesAdjacentSelectedEdges() {
+        let cube = Fixtures.cube()
+        #expect(throws: MeshOpError.self) {
+            try BevelEdges.apply(cube,
+                                 selection: .edges([EdgeKey(VertexID(4), VertexID(5)),
+                                                    EdgeKey(VertexID(5), VertexID(6))]),
+                                 params: .init(width: 0.1))
+        }
+    }
+
+    @Test func refusesBoundaryEdge() {
+        let box = Fixtures.openBox() // rim edges border a single face
+        #expect(throws: MeshOpError.self) {
+            try BevelEdges.apply(box, selection: .edges([EdgeKey(VertexID(4), VertexID(5))]),
+                                 params: .init(width: 0.1))
+        }
+    }
+
+    @Test func refusesHighValenceEndpoint() {
+        // Interior grid edge: endpoints touch 4 faces — outside the strict v1 class.
+        let grid = Fixtures.grid(3)
+        let center = VertexID(5), right = VertexID(6) // interior verts of 3×3 grid
+        #expect(throws: MeshOpError.self) {
+            try BevelEdges.apply(grid, selection: .edges([EdgeKey(center, right)]),
+                                 params: .init(width: 0.1))
+        }
+    }
+
+    @Test func refusesOversizedAndNonPositiveWidth() {
+        let cube = Fixtures.cube()
+        #expect(throws: MeshOpError.self) {
+            try BevelEdges.apply(cube, selection: .edges([topFrontEdge]),
+                                 params: .init(width: 1.0)) // ≥ adjacent edge length
+        }
+        #expect(throws: MeshOpError.self) {
+            try BevelEdges.apply(cube, selection: .edges([topFrontEdge]),
+                                 params: .init(width: 0))
+        }
+    }
+
+    @Test func refusesEmptyAndUnknownEdge() {
+        let cube = Fixtures.cube()
+        #expect(throws: MeshOpError.emptySelection) {
+            try BevelEdges.apply(cube, selection: .edges([]), params: .init(width: 0.1))
+        }
+        #expect(throws: MeshOpError.self) {
+            try BevelEdges.apply(cube, selection: .edges([EdgeKey(VertexID(90), VertexID(91))]),
+                                 params: .init(width: 0.1))
+        }
+    }
+
+    @Test func bevelRoundTripsAndLeavesOriginalUntouched() throws {
+        let cube = Fixtures.cube()
+        let hashBefore = cube.topologyHash
+        let r = try BevelEdges.apply(cube, selection: .edges([topFrontEdge]),
+                                     params: .init(width: 0.3))
+        #expect(cube.topologyHash == hashBefore) // snapshot-undo record intact
+        let reimported = try MeshIO.mesh(from: MeshIO.flat(from: r.mesh))
+        #expect(reimported.vertexCount == r.mesh.vertexCount)
+        #expect(reimported.edgeCount == r.mesh.edgeCount)
+        #expect(reimported.faceCount == r.mesh.faceCount)
+        #expect(abs(reimported.signedVolume - r.mesh.signedVolume) < 1e-12)
+    }
+}

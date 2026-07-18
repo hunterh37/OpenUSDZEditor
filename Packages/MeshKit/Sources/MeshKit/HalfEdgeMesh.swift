@@ -26,6 +26,11 @@ public struct EdgeKey: Hashable, Sendable, Codable {
     public func contains(_ v: VertexID) -> Bool { v == a || v == b }
 }
 
+extension EdgeKey: Comparable {
+    /// Deterministic ordering for stable op iteration and the HUD edge-picker.
+    public static func < (l: EdgeKey, r: EdgeKey) -> Bool { (l.a, l.b) < (r.a, r.b) }
+}
+
 // MARK: - Selection
 
 public enum ComponentSelection: Sendable, Equatable {
