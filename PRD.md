@@ -1,4 +1,4 @@
-# DicyaninUSDZEditor — Product Requirements Document
+# OpenUSDZEditor — Product Requirements Document
 
 **Version:** 0.1 (Draft)
 **Date:** 2026-07-14
@@ -10,7 +10,7 @@
 
 ## 1. Vision
 
-DicyaninUSDZEditor is the missing professional, open-source USDZ viewer and editor for macOS. Today the ecosystem is fragmented: Reality Composer Pro is closed-source and visionOS-centric, `usdview` is a developer utility with a dated Qt UI, and online converters are lossy black boxes. We build a native, enterprise-grade 3D editor that treats USDZ as a first-class document format — view it, inspect it, edit it, convert into it, and ship it.
+OpenUSDZEditor is the missing professional, open-source USDZ viewer and editor for macOS. Today the ecosystem is fragmented: Reality Composer Pro is closed-source and visionOS-centric, `usdview` is a developer utility with a dated Qt UI, and online converters are lossy black boxes. We build a native, enterprise-grade 3D editor that treats USDZ as a first-class document format — view it, inspect it, edit it, convert into it, and ship it.
 
 **One-liner:** "The Sketch/Nova of USDZ — a beautiful native Mac editor for the format Apple bet the spatial ecosystem on."
 
@@ -31,8 +31,8 @@ DicyaninUSDZEditor is the missing professional, open-source USDZ viewer and edit
 ## 4. Product Pillars
 
 1. **Viewer first, flawless.** Instant open, accurate PBR rendering via RealityKit, IBL environments, turntable, AR-scale ground plane, hierarchy + property inspection. If we only ever shipped the viewer, it should already be the best USDZ viewer on Mac.
-2. **Real editing.** Non-destructive edits on the USD stage: transforms, prim hierarchy, materials, variants, metadata — saved back to valid `.usdz`/`.usda`/`.usdc`.
-   **North star: the output is a USDZ that renders correctly in RealityKit and AR QuickLook.** The app only ever *authors* RealityKit-compatible constructs (UsdPreviewSurface materials, standard geometry/skeleton schemas, supported texture formats). Exotic USD features that arrive in files from other tools (MaterialX networks, custom schemas, render purposes) are preserved and surfaced for inspection — we never destroy data silently — but the editor's tooling, validation, and defaults all drive toward one goal: a clean, portable USDZ your RealityKit app can load.
+2. **Real editing — the whole point.** Full non-destructive authoring on the USD stage: transforms, prim hierarchy, materials and texture networks, mesh geometry, variants, skeletons/animation, lights, cameras, physics, and metadata — saved back to valid `.usdz`/`.usda`/`.usdc`. This is a genuine 3D editor, not a viewer with a settings panel. If a USD construct can be authored, authoring it is in scope.
+   **Default target, RealityKit-clean.** By default every export is validated for RealityKit and AR QuickLook compatibility, and the app steers you toward UsdPreviewSurface materials, standard geometry/skeleton schemas, and supported texture formats — because that's what most users ship. But RealityKit compatibility is a *validation baseline you can see and choose*, not a ceiling on what the editor will author. Exotic and advanced USD (MaterialX networks, custom schemas, render purposes, composition arcs) is preserved, editable, and — increasingly — authorable, always flagged against the active export profile so you know exactly what will and won't survive a RealityKit round-trip. We never destroy data silently, and we never refuse to let you author something USD supports.
 3. **Universal conversion.** GLB/glTF, OBJ, FBX (via FBX2glTF), STL, PLY, DAE → USDZ, with a transparent, configurable pipeline and per-step logging. Batch mode.
 4. **Scriptable power.** Bundled Python + `usd-core` runtime. Every heavy operation is a script the user can read, copy, and extend. In-app Python console against the live stage.
 5. **Enterprise design & architecture.** Classic 3D editor layout (outliner / viewport / inspector / timeline-lite), restrained visual design, modular Swift packages, documented extension points. **Tested to production grade:** CI-enforced coverage gates — 100% on all logic modules, snapshot/golden-image/UI-test verification on visual modules, round-trip file-integrity invariants on every commit (see `specs/testing.md`).
@@ -86,16 +86,26 @@ Additional editing features:
 - Bundled Python 3.12 + `usd-core` (pip wheel) — zero user setup.
 - In-app Python console bound to the open stage (`stage` variable pre-injected).
 - Script library panel: shippped scripts (decimate via pymeshlab optional, batch ops) + user scripts folder.
-- Headless CLI: `dicyanin-usdz convert in.glb out.usdz --preset ecommerce`.
+- Headless CLI: `openusdz convert in.glb out.usdz --preset ecommerce`.
 
-## 6. Non-Goals (v1)
+## 6. Scope & Non-Goals
 
-- Mesh modeling-from-scratch, sculpting, subdivision-surface modeling, booleans, retopology. (Targeted mesh *repair and adjustment* ops — extrude/inset/delete/merge/fill/bevel — ARE in scope as the post-1.0 MVP+ phase; see `specs/mesh-editing.md`.)
-- Full MaterialX authoring (read/inspect only; PreviewSurface is the editable target).
+Editing is the product. The editing surface is deliberately broad and grows along the roadmap — mesh authoring, material and texture-network authoring, skeleton/animation authoring, lighting, cameras, and physics are all in scope, phased by value and verifiability (see `ROADMAP.md`). Nothing about "it's a converter/viewer" caps what the editor will let you author.
+
+**Phasing, not exclusion.** These are sequenced later because they need their invariant/test scaffolding first, *not* because they're off-limits:
+
+- Full mesh modeling (primitives, extrude/inset/bevel/loop-cut, booleans, mirror/array, subdivision preview, retopology-lite). Repair/adjustment ops and the primitive + build-recipe pipeline already ship; broader modeling follows in the mesh-authoring phases.
+- MaterialX authoring and MaterialX→PreviewSurface baking (inspect/preserve today; author + bake on the roadmap).
+- Skeleton, skin-weight, and animation authoring (playback ships first; keyframe/clip authoring follows).
+- Lighting, camera, and physics (RigidBody/Collider) schema authoring for RealityKit content.
+
+**Genuine non-goals** (these we do not intend to build):
+
 - Windows/Linux ports (architecture shouldn't preclude it, but no effort spent).
 - Cloud sync, accounts, telemetry. None. It's a local pro tool.
-- Rigging/animation authoring (playback yes, authoring no).
-- Authoring USD features RealityKit can't render (MaterialX networks, custom schemas, exotic composition). We read/preserve/flag them; we never create them. The app's output target is RealityKit/QuickLook-compatible USDZ, full stop.
+- Digital-sculpting / voxel workflows and a general node-graph shading DCC UI — we author USD structures directly and with focused tools, not by reimplementing Blender or Substance.
+
+Everything the editor authors is measured against a selectable **export profile** (RealityKit/QuickLook by default; `lossless`/`full-USD` for advanced work), so "will this survive RealityKit?" is always answered explicitly rather than by refusing the edit.
 
 ## 7. Architecture Requirements
 
@@ -126,7 +136,8 @@ Additional editing features:
 | RealityKit can't display everything USD expresses | Stage (truth) vs. viewport (projection) split; badge unsupported features rather than hide them |
 | usd-core wheel size | Fetched by build script rather than committed to the repo; zipped stdlib; no signing constraints since users compile from source |
 | FBX licensing | Never link FBX SDK; use FBX2glTF binary as optional user-downloaded helper |
-| Scope creep toward a DCC | Non-goals enforced in review; roadmap gates |
+| Editing breadth outpaces test/invariant scaffolding | Each authoring domain ships behind its verification harness (invariants, golden files, round-trip diff) before its UI; roadmap phases gate on the harness, not the feature |
+| Advanced authoring produces files RealityKit can't load | Selectable export profiles + always-on compatibility validation; the app flags non-portable constructs rather than forbidding them |
 
 ## 11. Document Map
 

@@ -1,6 +1,49 @@
-# DicyaninUSDZEditor — Roadmap
+# OpenUSDZEditor — Roadmap
 
 Everything below is scoped to what native Swift + RealityKit + embedded Python/usd-core can realistically deliver. Phases gate each other; a phase ships as a tagged release.
+
+This is a full 3D **editor**. The roadmap is organized around two spines that run the length of the project: **(A) comprehensive, CI-enforced test coverage** (Phase T, cross-cutting, always-on) and **(B) high-value USDZ editing tools** (the numbered phases, culminating in the authoring phases 7–12). Every editing capability ships behind its verification harness — invariants, golden files, round-trip `usddiff` — *before* its UI. Feature phases gate on the harness, not the demo.
+
+---
+
+## Phase T — Test Coverage Hardening (cross-cutting, continuous, blocking)
+
+**Reality check:** `specs/testing.md` promises CI-enforced per-module coverage floors, but today the *only* gate wired into CI is MeshKit at 100% (`scripts/coverage-gate.sh`). `test-all.sh --coverage` runs coverage but fails nothing; every other module's floor is aspirational. This is the highest-leverage debt in the repo — untested logic is shipping green. Phase T closes it and keeps it closed. **No feature phase below is "done" until its module's gate is live and green.**
+
+### T0 — Generalize the gate (do first, unblocks everything)
+- [ ] Refactor `coverage-gate.sh` from MeshKit-only into a data-driven gate: read a `MODULES` table of `(module, floor)` and run xccov per module. Keep the annotation/manifest machinery.
+- [ ] Wire the generalized gate into `ci.yml` as a required check; delete the "wired in as modules gain surface" TODO comment — the surface is here now.
+- [ ] Per-module floors enforced exactly as `specs/testing.md` §Floors declares them:
+  - [ ] USDCore **100%**
+  - [ ] EditingKit **100%** (every command execute/undo/redo/coalesce path)
+  - [ ] ValidationKit **100%** (every rule × pass/fail/edge + quick-fix round-trip)
+  - [ ] ConversionKit **100%** logic (corpus integration separate)
+  - [ ] ScriptingKit **100%** logic (grows with the REPL; gate lands with the console)
+  - [ ] USDBridge **95%** (crash handlers annotated)
+  - [ ] DicyaninDesignSystem **95%** + snapshot catalog
+  - [ ] ViewportKit **90%** + golden images
+  - [ ] EditorUI **90%** + snapshots + XCUITest
+  - [ ] App/CLI **95%** (subcommand × exit-code matrix)
+- [ ] Coverage-delta PR comment; no override label (per spec, on purpose).
+
+### T1 — Fill the test layers the spec names but CI doesn't yet run
+- [ ] **Round-trip invariants** as a CI job: open → save → `usddiff` clean, and open → edit → undo-all → save → diff clean, over the committed mini-corpus (spec §4).
+- [ ] **Bridge mini-corpus**: 20 hand-built usda/usdz fixtures (variants, skels, animations, exotic schemas, malformed) with golden assertions (spec §2).
+- [ ] **Conversion corpus gate**: Khronos glTF-Sample-Models in CI; success-rate gate *and* re-open-and-validate every output through ComplianceChecker (spec §3, Phase 2 exit).
+- [ ] **Property-based suite** beyond MeshKit: prim-path ops, TRS compose/decompose, name sanitization (spec §5).
+- [ ] **Golden-image rendering** harness for the viewport: offscreen renders vs. reference PNGs, ΔE gate, per debug-view-mode and IBL preset (spec §6).
+- [ ] **Snapshot UI** catalog: every DesignSystem component state + every inspector/outliner panel config (spec §7).
+- [ ] **XCUITest smoke** flows headless per-PR, full matrix nightly (spec §8).
+- [ ] **CLI matrix**: every subcommand × {valid, invalid, warning} × {default, --json, --strict} (spec §9).
+
+### T2 — Keep it honest
+- [ ] Nightly: full corpus, perf benchmarks (1M-tri orbit fps, open-time), `leaks` pass on a scripted session.
+- [ ] Mutation-testing spot-checks on the 100% modules — line coverage ≠ assertion quality; prove the tests actually kill mutants on EditingKit/ValidationKit/USDCore.
+- [ ] Every new authoring op (phases 6–12) lands with its invariant/golden harness in the *same PR* — enforced in CONTRIBUTING.md and structurally by the gate.
+
+**Exit:** every module in `specs/testing.md` has a live, red-on-failure gate; the four cross-cutting layers (round-trip, corpus, golden-image, XCUITest) run in CI; "green" means "actually tested."
+
+---
 
 ## Phase 0 — Foundation (weeks 1–3)
 
@@ -33,7 +76,7 @@ Everything below is scoped to what native Swift + RealityKit + embedded Python/u
 - [x] Texture pipeline (resize, re-encode, channel handling)
 - [x] Conversion sheet UI with per-stage options + live log; presets (ecommerce, quicklook-strict, lossless) — preset model + CLI `--preset` ✓; sheet UI + live log ✓
 - [x] Batch converter window + CSV/JSON reports — engine + CSV/JSON reports ✓ (BatchConverter); window UI ✓
-- [ ] `dicyanin-usdz` CLI: convert ✓ (with `--preset`), convert-batch ✓ (with `--preset`), info ✓, thumbnail TODO
+- [ ] `openusdz` CLI: convert ✓ (with `--preset`), convert-batch ✓ (with `--preset`), info ✓, thumbnail TODO
 - [ ] glTF sample-model corpus in CI with success-rate gate
 
 **Exit:** drop a GLB, get a validated USDZ. CLI usable in pipelines.
@@ -110,18 +153,78 @@ Targeted mesh repair & adjustment — extrude a mounting tab, close a hole, merg
 - [ ] LoopCut (quad-strip traversal)
 - [ ] Multi-segment bevel, skin-weight propagation investigation
 
-## Post-1.0 Candidates (community-signal driven)
+# Editing-Tools Spine (post-1.0) — the "god level" authoring roadmap
 
-- "Strip non-RealityKit data" cleanup action + MaterialX→PreviewSurface baking quick-fix
-- visionOS companion viewer (view synced over network)
-- Mesh decimation UI (pymeshlab-backed), UV atlas repacking
-- MeshKit extensions: solidify, edge slide, knife (candidate ops after Phase 6 lands)
-- Physics authoring (RigidBody/Collider schemas) for RealityKit content
-- USD stage diff view (compare two files)
-- KTX2/Basis texture output, meshopt compression
-- Timeline editing (trim/retime animation clips)
-- Plugin API v2: native Swift plugin bundles for importers/panels
+The v1 editor establishes the stage-as-truth + command-layer + invariant-harness foundation. Phases 7–12 turn it into a complete USDZ authoring tool. Each phase is ordered by **(value to the target users) × (verifiability today)**. Every op is a pure-function command with a machine-checkable invariant harness landing in the same PR (Phase T rule). Every phase carries an export-profile matrix: what it authors, and what each construct degrades to under the RealityKit profile.
 
-## Explicitly Out (see PRD non-goals)
+## Phase 7 — Material & Texture Authoring (v1.2)
 
-Modeling/sculpting, MaterialX authoring, cloud accounts/telemetry, Windows/Linux.
+Close the material story the inspector already half-owns. Highest-demand editing gap today (texture replace is a standing Phase 3 TODO).
+
+- [ ] `UsdUVTexture` network authoring in `USDAuthorStage` — the missing model that blocks texture replace/resize/swap.
+- [ ] Texture replace / resize / re-encode / channel-repack from the Material inspector, undoable, round-trip tested.
+- [ ] Create/duplicate/delete PreviewSurface materials; material binding editor (assign, unbind, bind-by-GeomSubset).
+- [ ] Full ORM authoring, normal-map handling, UV-transform (`st` scale/rotate/translate) nodes.
+- [ ] MaterialX **read→PreviewSurface bake** quick-fix ("make this RealityKit-clean") + "strip non-RealityKit data" cleanup action.
+- [ ] KTX2/Basis + meshopt on export as an advanced-profile option.
+- **Harness:** material-graph round-trip diff; rendered-swatch golden images; ΔE parity on bake.
+
+## Phase 8 — Full Mesh Modeling (v1.3) — extends Phase 6 MeshKit
+
+Repair ops + primitives + build-recipes already ship. Grow into real modeling.
+
+- [ ] LoopCut (quad-strip traversal); multi-segment bevel; edge slide; knife; solidify.
+- [ ] Boolean ops (union/difference/intersect) with manifold-preserving invariant checks.
+- [ ] Mirror, radial/grid array (as instanceable references where possible), duplicate-along-path.
+- [ ] Subdivision-surface **preview** + bake-to-mesh (Catmull-Clark), decimation UI (pymeshlab-backed).
+- [ ] Bridge/loft between edge loops; symmetry-aware editing.
+- **Harness:** Euler/manifold/winding invariants per op; analytic-volume checks; deepened fuzz corpus; golden `.usda` per op.
+
+## Phase 9 — UV & Attribute Authoring (v1.4)
+
+- [ ] UV editor panel: view/select/transform UV islands over the assigned texture.
+- [ ] Unwrap (angle-based/LSCM via bundled Python) + atlas repack; seam marking.
+- [ ] GeomSubset authoring (create/split/merge subsets for per-face material assignment).
+- [ ] Primvar/attribute editor: author/edit arbitrary primvars, vertex colors, custom attributes with type safety.
+- **Harness:** UV round-trip byte-fidelity on untouched islands; overlap/utilization metrics as golden values.
+
+## Phase 10 — Skeleton & Animation Authoring (v1.5)
+
+Playback ships in Phase 1; this authors it.
+
+- [ ] UsdSkel authoring: edit joint hierarchy, rest/bind transforms, re-bind skin weights (weight paint).
+- [ ] Keyframe authoring on transforms + timeline editor: create/trim/retime/blend animation clips.
+- [ ] Skinned-mesh editing lift — replace the Phase 6 hard refusal with weight-propagating edits.
+- [ ] Blendshape/target authoring for RealityKit.
+- **Harness:** joint-transform round-trip; deterministic sampled-pose golden frames; weight-sum-to-1 invariant.
+
+## Phase 11 — Scene Authoring: Lights, Cameras, Physics (v1.6)
+
+- [ ] Light authoring (Dome/Rect/Sphere/Distant) with RealityKit-supported params; IBL bake.
+- [ ] Camera prim authoring + bookmark export as USD cameras.
+- [ ] Physics: RigidBody/Collider/PhysicsScene schema authoring for RealityKit content.
+- [ ] AnchoringComponent / RealityKit behavior metadata authoring for QuickLook.
+- **Harness:** schema-conformance validation; ComplianceChecker gates each new construct against every profile.
+
+## Phase 12 — Advanced USD & Composition Authoring (v2)
+
+The "we author everything USD supports" endgame — always profile-flagged.
+
+- [ ] Composition authoring: references/payloads/sublayers/variant-set *creation* (Phase 1–3 made these read-only).
+- [ ] Variant set authoring (build a variant set from selected prim states).
+- [ ] MaterialX network authoring (not just bake) behind the full-USD profile.
+- [ ] Custom schema / API-schema application UI; render-purpose authoring.
+- [ ] Instancing authoring (point instancers, scenegraph instancing) for volume scenes.
+- **Harness:** composed-vs-flattened equivalence tests; profile-degradation snapshots (what each construct becomes under RealityKit export).
+
+## Continuous / Platform
+
+- [ ] Python console REPL + `app.*` scripting parity for every command above (single-undo script runs).
+- [ ] Command palette (⌘K) coverage for all authoring actions via ActionRegistry.
+- [ ] USD stage **diff view** (compare two files / before-after an edit batch).
+- [ ] Plugin API v2: native Swift plugin bundles for importers/panels/tools.
+- [ ] visionOS companion viewer (edit on Mac, view synced over network).
+
+## Genuine Non-Goals (see PRD §6)
+
+Digital sculpting/voxel workflows, a general node-graph shading DCC UI, cloud accounts/telemetry, Windows/Linux ports. Everything else that USD can express is on this roadmap.
