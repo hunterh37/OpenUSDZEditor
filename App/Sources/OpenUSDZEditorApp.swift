@@ -18,14 +18,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct DicyaninUSDZEditorApp: App {
+struct OpenUSDZEditorApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var document: EditorDocument?
     @State private var openError: String?
 
     var body: some Scene {
-        WindowGroup("Dicyanin USDZ Editor") {
+        WindowGroup("Open USDZ Editor") {
             EditorShellView(document: document)
                 .frame(minWidth: 1000, minHeight: 620)
                 .alert("Could Not Open File", isPresented: .constant(openError != nil)) {
@@ -35,7 +35,7 @@ struct DicyaninUSDZEditorApp: App {
                 }
                 .onOpenURL(perform: open)
                 .task {
-                    // Dev convenience: `swift run DicyaninUSDZEditorApp file.usda`
+                    // Dev convenience: `swift run OpenUSDZEditorApp file.usda`
                     // opens straight into the file.
                     if document == nil,
                        let arg = CommandLine.arguments.dropFirst().first(where: {
@@ -146,12 +146,19 @@ struct DicyaninUSDZEditorApp: App {
         }
     }
 
-    /// Resolved by walking up from the cwd for `swift run`; the packaged app
-    /// will carry the script in its bundle resources (Phase 1).
+    /// Resolution order: explicit env override → bundled resource (packaged
+    /// `.app` built via the Xcode project) → walk up from the cwd (`swift run`
+    /// from the repo). This lets the same code path serve both the dev binary
+    /// and the shipped bundle.
     static var snapshotScriptPath: String {
         if let override = ProcessInfo.processInfo.environment["DICYANIN_SNAPSHOT_SCRIPT"],
            !override.isEmpty {
             return override
+        }
+        if let bundled = Bundle.main.resourceURL?
+            .appendingPathComponent("Python/stage_snapshot.py"),
+           FileManager.default.fileExists(atPath: bundled.path) {
+            return bundled.path
         }
         var dir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         for _ in 0..<6 {

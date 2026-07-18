@@ -1,0 +1,77 @@
+# XcodeGen spec for the Dicyanin USDZ Editor macOS app.
+#
+# The SPM packages under Packages/ remain the source of truth for library code,
+# tests, and the CLI (built with `swift build` / `swift test`). This project only
+# exists to produce a *real* .app bundle for the editor shell — something a bare
+# `swift run` executable can't be (no Info.plist, no bundle id, no document-type
+# registration, no place to carry the Python runtime).
+#
+# Regenerate with:  xcodegen generate   (or: bash scripts/generate-xcodeproj.sh)
+# The generated DicyaninUSDZEditor.xcodeproj is git-ignored — the spec is the
+# checked-in source of truth, per the repo's specs-as-contract ethos.
+
+name: DicyaninUSDZEditor
+
+options:
+  bundleIdPrefix: io.medvr.dicyanin
+  deploymentTarget:
+    macOS: "14.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_LANGUAGE: en
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+
+# Local SPM packages consumed by the app target. XcodeGen resolves these the
+# same way Xcode does, so the app links the exact same libraries `swift run` does.
+packages:
+  EditorUI:
+    path: Packages/EditorUI
+  USDBridge:
+    path: Packages/USDBridge
+  USDCore:
+    path: Packages/USDCore
+
+targets:
+  DicyaninUSDZEditor:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Sources
+      # Ship the Python bridge scripts inside the bundle (Contents/Resources/Python/…)
+      # so the app resolves them via Bundle.main instead of walking up from the cwd.
+      - path: Resources/Python
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: EditorUI
+        product: EditorUI
+      - package: USDBridge
+        product: USDBridge
+      - package: USDCore
+        product: USDCore
+    settings:
+      base:
+        PRODUCT_NAME: DicyaninUSDZEditor
+        PRODUCT_BUNDLE_IDENTIFIER: io.medvr.dicyanin.usdzeditor
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        COMBINE_HIDPI_IMAGES: YES
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../Frameworks"
+
+schemes:
+  DicyaninUSDZEditor:
+    build:
+      targets:
+        DicyaninUSDZEditor: all
+    run:
+      config: Debug
+    archive:
+      config: Release

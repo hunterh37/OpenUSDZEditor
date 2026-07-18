@@ -1,68 +1,106 @@
-# DicyaninUSDZEditor
+<div align="center">
+
+# OpenUSDZEditor
 
 **The professional, open-source USDZ viewer and editor for macOS.**
 
 A native Mac app — SwiftUI + RealityKit + an embedded Python/`usd-core` runtime — that treats USDZ as a first-class document format: open it, inspect it, edit it, convert into it, validate it, and ship it.
 
+<br/>
+
+[![CI](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Swift 6](https://img.shields.io/badge/Swift-6.0-F05138?logo=swift&logoColor=white)](https://swift.org)
+[![Platform](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
+[![SwiftPM](https://img.shields.io/badge/SwiftPM-compatible-brightgreen?logo=swift&logoColor=white)](https://www.swift.org/package-manager/)
+
+[![Last commit](https://img.shields.io/github/last-commit/hunterh37/OpenUSDZEditor/main?logo=git&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/commits/main)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/hunterh37/OpenUSDZEditor?logo=github)](https://github.com/hunterh37/OpenUSDZEditor/pulse)
+[![Open issues](https://img.shields.io/github/issues/hunterh37/OpenUSDZEditor?logo=github)](https://github.com/hunterh37/OpenUSDZEditor/issues)
+[![Open PRs](https://img.shields.io/github/issues-pr/hunterh37/OpenUSDZEditor?logo=github)](https://github.com/hunterh37/OpenUSDZEditor/pulls)
+[![Contributors](https://img.shields.io/github/contributors/hunterh37/OpenUSDZEditor?logo=github)](https://github.com/hunterh37/OpenUSDZEditor/graphs/contributors)
+[![Stars](https://img.shields.io/github/stars/hunterh37/OpenUSDZEditor?style=flat&logo=github)](https://github.com/hunterh37/OpenUSDZEditor/stargazers)
+
+[![Code size](https://img.shields.io/github/languages/code-size/hunterh37/OpenUSDZEditor?logo=github)](https://github.com/hunterh37/OpenUSDZEditor)
+[![Top language](https://img.shields.io/github/languages/top/hunterh37/OpenUSDZEditor?logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor)
+[![Repo size](https://img.shields.io/github/repo-size/hunterh37/OpenUSDZEditor?logo=github)](https://github.com/hunterh37/OpenUSDZEditor)
+
+</div>
+
+---
+
 ## Why this exists
 
 Apple bet the spatial ecosystem on USD, but the tooling around it is fragmented: Reality Composer Pro is closed-source and visionOS-centric, `usdview` is a developer utility with a dated Qt UI, and online converters are lossy black boxes. There is no open tool that lets you *edit* a USDZ — rename prims, swap materials, adjust transforms, fix metadata, recolor a model — without round-tripping through a full DCC like Blender.
 
-DicyaninUSDZEditor is the missing piece: a beautiful, enterprise-grade native editor for the format, in the spirit of what Sketch or Nova did for their domains. Built for AR/spatial developers prepping RealityKit and QuickLook assets, 3D artists converting GLB/FBX/OBJ deliverables, e-commerce teams producing AR product visuals at volume, and pipeline engineers who want scriptable USD tooling.
+OpenUSDZEditor is the missing piece: a beautiful, enterprise-grade native editor for the format, in the spirit of what Sketch or Nova did for their domains. Built for AR/spatial developers prepping RealityKit and QuickLook assets, 3D artists converting GLB/FBX/OBJ deliverables, e-commerce teams producing AR product visuals at volume, and pipeline engineers who want scriptable USD tooling.
 
 ## What it does
 
 - **Viewer first, flawless.** Instant open of `.usdz`/`.usda`/`.usdc`/`.usd`, accurate PBR rendering in a RealityKit viewport (orbit/pan/dolly, framing, grid + axes), an outliner mirroring the USD prim hierarchy, read-only inspectors for transforms, prims, materials, and stage metadata, plus a stats HUD.
 - **Real editing.** Non-destructive edits on the live USD stage — transforms, prim hierarchy, materials and model-wide recoloring, mesh edit mode (multi-face selection, bevel), variants, metadata — saved back to valid `.usdz`/`.usda`/`.usdc`.
 - **Universal conversion.** GLB/glTF (native importer), OBJ/STL/PLY/DAE (ModelIO) → USDZ through a transparent, configurable pipeline with per-stage logging, presets (ecommerce, quicklook-strict, lossless), and a batch converter with CSV/JSON reports.
-- **Scriptable power.** Bundled Python + `usd-core`; heavy operations are readable scripts, and the `dicyanin-usdz` CLI (`info`, `convert`, `convert-batch`) drops the same pipeline into CI and automation.
+- **Scriptable power.** Bundled Python + `usd-core`; heavy operations are readable scripts, and the `openusdz` CLI (`info`, `convert`, `convert-batch`) drops the same pipeline into CI and automation.
 - **RealityKit-first output.** The north star: every file the app writes renders correctly in RealityKit and AR QuickLook. Exotic USD features arriving from other tools are preserved and surfaced — never silently destroyed — but tooling, validation, and defaults all drive toward a clean, portable USDZ.
 
-See `PRD.md` for the full product spec, `ROADMAP.md` for phase status, and `specs/` for per-module design docs.
+See [`PRD.md`](PRD.md) for the full product spec, [`ROADMAP.md`](ROADMAP.md) for phase status, and [`specs/`](specs/) for per-module design docs.
 
 ## Open source ethos
 
 - **MIT licensed, no strings.** The whole editor — app, packages, CLI, specs — is open. Use it in commercial pipelines, fork it, embed the packages.
 - **Transparent by design.** Conversion and editing are inspectable pipelines, not black boxes: every stage logs what it did, and the Python that drives the USD stage is code you can read, copy, and extend.
-- **Specs and tests as the contract.** Every module has a written spec in `specs/` and CI-enforced coverage gates — 100% on logic modules, snapshot/golden-image verification on visual ones, round-trip file-integrity invariants on every commit (see `specs/testing.md`).
+- **Specs and tests as the contract.** Every module has a written spec in `specs/` and CI-enforced coverage gates — 100% on logic modules, snapshot/golden-image verification on visual ones, round-trip file-integrity invariants on every commit (see [`specs/testing.md`](specs/testing.md)).
 - **Modular, contributable architecture.** Independent SPM packages with one-directional dependencies enforced by `scripts/dependency-lint.sh`, and documented extension points (importers, validators, tools) so contributions don't require understanding the whole app.
 - **Data safety over cleverness.** We never silently drop or rewrite what we don't understand; unknown USD constructs are preserved and shown for inspection.
 
 ## Architecture
 
-Modular SPM workspace under `Packages/`:
+Modular SPM workspace under `Packages/`. Every package is built and tested on each push by the [unified CI pipeline](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) — a green [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) badge means the whole matrix below passed its tests, coverage floors, dependency-lint, and module-governance gates.
 
-| Package | Role |
-| --- | --- |
-| `USDCore` | Pure Swift stage model — prim paths, prims, attributes, stage protocols |
-| `USDBridge` | Python/`usd-core` bridge behind a swappable executor seam, with graceful degradation when no runtime is present |
-| `MeshKit` | Mesh editing operations (topology edits, bevel, …) |
-| `EditingKit` | Non-destructive edit operations on the stage |
-| `ConversionKit` | Importers, IntermediateScene IR, texture pipeline, batch converter |
-| `ValidationKit` | AR QuickLook / RealityKit compatibility validation |
-| `ScriptingKit` | Python console and scripting surface |
-| `ViewportKit` | RealityKit viewport, camera, selection |
-| `EditorUI` | Outliner, inspectors, mesh-edit overlay, editor chrome |
-| `DicyaninDesignSystem` | Design tokens (4pt grid, palette, type scale) + core controls |
+| Package | Role | Build & tests |
+| --- | --- | --- |
+| `USDCore` | Pure Swift stage model — prim paths, prims, attributes, stage protocols | [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=passing&logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) |
+| `USDBridge` | Python/`usd-core` bridge behind a swappable executor seam, graceful degradation when no runtime is present | [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=passing&logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) |
+| `MeshKit` | Mesh editing operations (topology edits, bevel, …) — 100% coverage floor + fuzz corpus | [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=passing&logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) |
+| `EditingKit` | Non-destructive edit operations on the stage | [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=passing&logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) |
+| `ConversionKit` | Importers, IntermediateScene IR, texture pipeline, batch converter | [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=passing&logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) |
+| `ValidationKit` | AR QuickLook / RealityKit compatibility validation | [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=passing&logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) |
+| `ScriptingKit` | Python console and scripting surface | [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=passing&logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) |
+| `ViewportKit` | RealityKit viewport, camera, selection | [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=passing&logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) |
+| `EditorUI` | Outliner, inspectors, mesh-edit overlay, editor chrome | [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=passing&logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) |
+| `DicyaninDesignSystem` | Design tokens (4pt grid, palette, type scale) + core controls | [![CI](https://img.shields.io/github/actions/workflow/status/hunterh37/OpenUSDZEditor/ci.yml?branch=main&label=passing&logo=swift&logoColor=white)](https://github.com/hunterh37/OpenUSDZEditor/actions/workflows/ci.yml) |
 
-Plus the app shell (`App/`), the `dicyanin-usdz` CLI (`CLI/`), and a headless editor harness (`Tools/EditorHarness`).
+Plus the app shell (`App/`), the `openusdz` CLI (`CLI/`), and a headless editor harness (`Tools/EditorHarness`).
 
 ## Build & test
 
 ```sh
 bash scripts/fetch-python-runtime.sh   # one-time: venv with usd-core
 bash scripts/test-all.sh               # every package's tests + app build
-cd App && swift run                    # launch the editor
-cd CLI && swift run dicyanin-usdz info model.usdz
-cd CLI && swift run dicyanin-usdz build recipe.json model.usda --json   # agent modeling loop (specs/build-recipes.md)
-cd CLI && swift run dicyanin-usdz thumbnail model.usda --frames 8 -o turn.##.png
+bash scripts/run-app.sh [model.usdz]   # build the real .app bundle and launch it
+cd App && swift run                    # quick dev run (unbundled binary)
+cd CLI && swift run openusdz info model.usdz
+cd CLI && swift run openusdz build recipe.json model.usda --json   # agent modeling loop (specs/build-recipes.md)
+cd CLI && swift run openusdz thumbnail model.usda --frames 8 -o turn.##.png
 ```
 
-Requires Xcode 16+ / Swift 6 on macOS 14+ (Apple Silicon primary, Intel best-effort). Without a Python runtime that can `import pxr`, the app degrades gracefully to a viewer-only state per `specs/usd-bridge.md`.
+Requires Xcode 16+ / Swift 6 on macOS 14+ (Apple Silicon primary, Intel best-effort). Without a Python runtime that can `import pxr`, the app degrades gracefully to a viewer-only state per [`specs/usd-bridge.md`](specs/usd-bridge.md).
+
+### The Xcode project
+
+The SPM packages under `Packages/` are the source of truth for all library code, tests, and the CLI — build them with `swift build` / `swift test`. The editor *shell* additionally needs a real `.app` bundle (Info.plist, bundle id, USD document-type registration, embedded Python scripts), which a bare `swift run` executable can't produce. That bundle is generated from [`project.yml`](project.yml) with [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`):
+
+```sh
+bash scripts/generate-xcodeproj.sh     # project.yml -> DicyaninUSDZEditor.xcodeproj
+open DicyaninUSDZEditor.xcodeproj       # or work in Xcode directly
+bash scripts/run-app.sh [model.usdz]    # build + launch the bundle in one step
+```
+
+`project.yml` is the checked-in source of truth; the generated `.xcodeproj` is git-ignored. `cd App && swift run` still works for a fast, unbundled dev loop (it resolves the Python scripts by walking up from the repo root rather than from bundle resources).
 
 ## Status
 
-Phase 0 (foundation) is complete. Phase 1 (best-in-class viewer) and Phase 2 (conversion) are well underway — viewport, outliner, inspectors, conversion pipeline, batch converter, and CLI are live, with mesh editing and material recoloring already landing ahead of schedule. See `ROADMAP.md` for the live checklist.
+Phase 0 (foundation) is complete. Phase 1 (best-in-class viewer) and Phase 2 (conversion) are well underway — viewport, outliner, inspectors, conversion pipeline, batch converter, and CLI are live, with mesh editing and material recoloring already landing ahead of schedule. See [`ROADMAP.md`](ROADMAP.md) for the live checklist.
 
 ## Contributing
 
@@ -70,4 +108,4 @@ Read the relevant spec in `specs/` before touching a module, keep the dependency
 
 ## License
 
-MIT.
+[MIT](LICENSE).
