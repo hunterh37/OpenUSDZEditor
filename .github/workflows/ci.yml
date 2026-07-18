@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Dependency lint
         run: bash scripts/dependency-lint.sh
+      - name: Module governance gate
+        run: bash scripts/module-governance.sh
 
   test:
     runs-on: macos-15

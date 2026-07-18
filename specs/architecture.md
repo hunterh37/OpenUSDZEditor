@@ -12,6 +12,7 @@ DicyaninUSDZEditor/
 ├── Packages/
 │   ├── USDCore/                  # Pure Swift USD stage model (no UI, no Python)
 │   ├── USDBridge/                # Python/usd-core interop (only module touching Python)
+│   ├── MeshKit/                  # Pure Swift half-edge mesh model + topology ops (zero deps)
 │   ├── ConversionKit/            # Importers, pipeline stages, batch engine
 │   ├── ViewportKit/              # RealityKit viewport, camera, gizmos, IBL
 │   ├── EditingKit/               # Command layer, undo, stage mutations
@@ -30,13 +31,36 @@ DicyaninUSDZEditor/
 ```
 App ─▶ EditorUI ─▶ {ViewportKit, EditingKit, ConversionKit, ValidationKit, ScriptingKit} ─▶ USDCore
 USDBridge ─▶ USDCore          (bridge implements USDCore protocols)
+{EditingKit, ViewportKit} ─▶ MeshKit   (MeshKit itself imports nothing internal)
 DicyaninDesignSystem ◀─ EditorUI only
 CLI ─▶ kits (never EditorUI)
 ```
 
+The authoritative, machine-checked form of this graph is the policy table in
+`scripts/dependency-lint.sh`. The script discovers packages from the
+filesystem, so a new package with no policy entry fails CI by construction;
+this document and that table must change in the same PR.
+
 - **USDCore never imports Python, RealityKit, or SwiftUI.** It defines `USDStageProtocol`, `Prim`, `Attribute`, `MaterialDescription`, `VariantSet` as value/reference types plus protocols.
 - **USDBridge is the only module that links the embedded Python.** It provides the concrete `USDStage` implementation by calling `usd-core`. Swapping it later for a native C++ OpenUSD build changes one module.
 - **ViewportKit consumes USDCore models, never USDBridge directly.** RealityKit entities are a derived projection rebuilt from stage-change notifications.
+- **MeshKit is pure Swift with zero internal dependencies** (see `specs/mesh-editing.md`): half-edge topology, primitives, and mesh ops. `EditingKit` wraps its ops in undoable commands; `ViewportKit` may consume it for component-overlay rendering. It never imports UI, GPU, or Python frameworks (framework ban enforced by the lint script, same as USDCore).
+
+## Adding a New Package (governance checklist — CI-enforced)
+
+`scripts/module-governance.sh` runs in CI's lint job and fails the build unless
+every package under `Packages/` is fully onboarded. To add a package you must,
+in the same PR:
+
+1. Add a policy entry to `scripts/dependency-lint.sh` (its allowed internal deps).
+2. Add it to the workspace layout and dependency rules in this document.
+3. Add a coverage-floor row to `specs/testing.md`.
+4. Create its test target with at least one real test.
+5. Add it to `scripts/test-all.sh` so the suite runs in CI.
+6. Write or extend a spec in `specs/` that references it.
+
+This exists because guardrails that require humans to remember them fail as the
+codebase grows — especially with AI agents generating packages quickly.
 
 ## Core Data Flow
 

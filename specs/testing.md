@@ -9,6 +9,7 @@
 | Module | Floor | Primary test style |
 |---|---|---|
 | USDCore | **100%** | Pure unit tests (value types, protocols, prim-path math) |
+| MeshKit | **100%** | Unit + property/fuzz corpus + golden meshes; gate live in `scripts/coverage-gate.sh` |
 | EditingKit | **100%** | Unit: every command's execute/undo/redo/coalesce path |
 | ValidationKit | **100%** | Unit: every rule × pass/fail/edge fixture, quick-fix round-trips |
 | ConversionKit | **100%** (logic) | Unit + corpus integration (glTF-Sample-Models in CI) |
