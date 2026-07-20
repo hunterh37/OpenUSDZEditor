@@ -62,7 +62,7 @@ This is a full 3D **editor**. The roadmap is organized around two spines that ru
 - [ ] IBL presets + custom HDR, exposure, background modes
 - [x] Outliner (search, visibility, type icons) + read-only inspector (transform, prim, material, stage tabs)
 - [x] Stats HUD, bounds/AR-scale readout
-- [ ] Animation playback transport
+- [x] Animation playback transport (play/pause/scrub/loop/speed over authored time-samples; `PlaybackTransport` + transport bar)
 - [ ] Debug view modes: wireframe, normals, UV checker, matcap
 - [ ] QuickLook thumbnail + preview extension for `.usda`
 - [ ] Build-from-source docs + unsigned release builds on GitHub Releases
