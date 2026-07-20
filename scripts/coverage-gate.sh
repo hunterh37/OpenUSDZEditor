@@ -54,8 +54,8 @@ MODULES=(
   "CLI|CLI|Sources|95"
   "USDBridge|Packages/USDBridge|Sources/USDBridge|95"          # spec floor; measures 100 today
   # Ratchet floors — pinned below spec target (noted), gap tracked in ROADMAP Phase T.
-  "ViewportKit|Packages/ViewportKit|Sources/ViewportKit|46"    # ratchet raised 40→46 by the gizmo-family math; spec target 90
-  "EditorUI|Packages/EditorUI|Sources/EditorUI|27"             # spec target 90
+  "ViewportKit|Packages/ViewportKit|Sources/ViewportKit|50"    # ratchet 46→50; spec target 90
+  "EditorUI|Packages/EditorUI|Sources/EditorUI|34"             # ratchet 27→34; spec target 90
 )
 
 REPORT=0
@@ -68,6 +68,11 @@ for arg in "$@"; do
 done
 
 overall_fail=0
+# A module that measured ZERO source files is a gate/config fault, not a low
+# score. It fails even in --report mode, which otherwise never fails: report
+# mode is for auditing real numbers, and "no number at all" is never a real
+# number. Kept separate from overall_fail for exactly that reason.
+not_measured=0
 summary=()
 
 for row in "${MODULES[@]}"; do
@@ -80,16 +85,36 @@ for row in "${MODULES[@]}"; do
     overall_fail=1; summary+=("$name: MISSING"); continue
   fi
 
-  (cd "$ROOT/$pkgdir" && swift test --enable-code-coverage >/dev/null 2>&1) || {
+  # --no-parallel is load-bearing, not a speed knob. This is the *measurement*
+  # pass, whose entire job is a reproducible number. Under swift-testing's
+  # default parallel execution, coverage counters written from the async tool
+  # pipeline are intermittently lost: ~8% of runs dropped a covered line group
+  # (e.g. AgentMCP's PrimTree collision loop, Tools+Asset normalize path) to
+  # zero even though every test passed — producing 90.5%/99.5%/100% across
+  # identical runs. It is NOT stale-profraw accumulation (the codecov dir holds
+  # a stable two files, overwritten each run). Collecting serially made the
+  # number deterministic (0 drops in 80 runs vs ~4 in 50 parallel). The
+  # parallel speed win belongs to test-all.sh; a gate that measures a different
+  # number each run measures nothing.
+  (cd "$ROOT/$pkgdir" && swift test --enable-code-coverage --no-parallel >/dev/null 2>&1) || {
     echo "  ✗ $name test suite failed to build/run"
     overall_fail=1; summary+=("$name: TEST-FAIL"); continue
   }
-  codecov_json="$(cd "$ROOT/$pkgdir" && swift test --show-codecov-path 2>/dev/null)"
+  # --show-codecov-path only resolves the path today, but keep it serial so it
+  # can never re-run tests in parallel and re-merge a flaky profdata over the one
+  # the pass above just produced.
+  codecov_json="$(cd "$ROOT/$pkgdir" && swift test --show-codecov-path --no-parallel 2>/dev/null)"
 
   result="$(python3 "$ROOT/scripts/_coverage_measure.py" \
               "$codecov_json" "$ROOT/$pkgdir/$srcsub" "$floor" "$REPORT")" || {
     echo "$result"
-    overall_fail=1; summary+=("$name: BELOW-FLOOR"); continue
+    overall_fail=1
+    if [[ "$result" == *"NOT MEASURED"* ]]; then
+      not_measured=1; summary+=("$name: NOT-MEASURED (gate fault)")
+    else
+      summary+=("$name: BELOW-FLOOR")
+    fi
+    continue
   }
   echo "$result"
   pct="$(echo "$result" | sed -n 's/.*MODULE_PCT=\([0-9.]*\).*/\1/p')"
@@ -100,6 +125,12 @@ echo ""
 echo "──── coverage summary"
 for s in "${summary[@]}"; do echo "  $s"; done
 
+if [[ "$not_measured" == "1" ]]; then
+  echo ""
+  echo "Coverage gate FAILED — a module measured zero source files."
+  echo "This is a gate/config fault: nothing was measured, so nothing is proven."
+  exit 1
+fi
 if [[ "$REPORT" == "1" ]]; then
   echo ""
   echo "(report mode — no gate enforced)"
