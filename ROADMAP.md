@@ -64,7 +64,7 @@ This is a full 3D **editor**. The roadmap is organized around two spines that ru
 - [x] Stats HUD, bounds/AR-scale readout
 - [ ] Animation playback transport
 - [ ] Debug view modes: wireframe, normals, UV checker, matcap
-- [ ] QuickLook thumbnail + preview extension for `.usda`
+- [x] QuickLook thumbnail + preview extension for `.usda` — `QuickLookKit` package (pure render-plan logic, 100% floor) drives two embedded `.appex` targets (`App/QuickLookThumbnail` `QLThumbnailProvider`, `App/QuickLookPreview` `QLPreviewingController`) registered for the Pixar USD UTIs; reuses the CLI `usdrecord` single-frame pipeline (specs/quicklook.md)
 - [ ] Build-from-source docs + unsigned release builds on GitHub Releases
 
 **Exit:** the best free USDZ viewer on macOS. Ship publicly, start collecting issues.
