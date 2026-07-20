@@ -55,7 +55,12 @@ public struct EditorShellView: View {
     }
 
     @State private var showValidation = false
+    @State private var showMCPActivity = false
     @State private var activeSheet: Sheet?
+
+    /// Live MCP agent activity (nil when the feature isn't wired, e.g. previews).
+    /// Owned/updated by the app; observed inside the activity panel subviews.
+    let mcpActivity: MCPActivityModel?
 
 
     private enum Sheet: String, Identifiable {
@@ -66,7 +71,7 @@ public struct EditorShellView: View {
     /// Menu-bar commands post these; the shell mirrors its toolbar actions so
     /// menu shortcuts and toolbar buttons drive the same state.
     public enum MenuCommand: String {
-        case convert, batch, scripts, library, validate
+        case convert, batch, scripts, library, validate, mcpActivity
         public static let notification = Notification.Name("EditorUI.MenuCommand")
     }
 
@@ -74,12 +79,14 @@ public struct EditorShellView: View {
                 isImporting: Bool = false,
                 importingFileName: String? = nil,
                 tutorial: TutorialEngine? = nil,
+                mcpActivity: MCPActivityModel? = nil,
                 makeScriptExecutor: @escaping () -> (any ScriptExecuting)? = { nil },
                 onReimportFile: @escaping (URL) async -> Void = { _ in }) {
         self.document = document
         self.isImporting = isImporting
         self.importingFileName = importingFileName
         self.tutorial = tutorial
+        self.mcpActivity = mcpActivity
         self.makeScriptExecutor = makeScriptExecutor
         self.onReimportFile = onReimportFile
     }
@@ -120,6 +127,7 @@ public struct EditorShellView: View {
             case .scripts: activeSheet = .scripts
             case .library: activeSheet = .library
             case .validate: if stage != nil { showValidation.toggle() }
+            case .mcpActivity: if mcpActivity != nil { showMCPActivity.toggle() }
             }
         }
     }
@@ -130,7 +138,6 @@ public struct EditorShellView: View {
 
     private var actionBar: some View {
         HStack(spacing: Spacing.xs) {
-            actionButton("Library", systemImage: "square.grid.2x2") { activeSheet = .library }
             actionButton("Convert", systemImage: "arrow.triangle.2.circlepath") { activeSheet = .convert }
             actionButton("Batch", systemImage: "square.stack.3d.up") { activeSheet = .batch }
             actionButton("Scripts", systemImage: "curlybraces") { activeSheet = .scripts }
@@ -140,7 +147,12 @@ public struct EditorShellView: View {
                          isActive: showValidation) {
                 showValidation.toggle()
             }
+            Divider().frame(height: 16).overlay(Palette.borderSubtle.color)
+            actionButton("Library", systemImage: "square.grid.2x2") { activeSheet = .library }
             Spacer()
+            if let mcpActivity {
+                MCPStatusAccessory(model: mcpActivity, showActivity: $showMCPActivity)
+            }
             if let stage {
                 StatusPill(text: "\(stage.primCount) prims", tint: Palette.success)
             }
@@ -181,6 +193,10 @@ public struct EditorShellView: View {
                     onApplyFix: { document?.applyQuickFix(for: $0) },
                     onClose: { showValidation = false })
                     .frame(minHeight: 140, idealHeight: 200, maxHeight: 320)
+            }
+            if showMCPActivity, let mcpActivity {
+                MCPActivityPanel(model: mcpActivity, onClose: { showMCPActivity = false })
+                    .frame(minHeight: 140, idealHeight: 220, maxHeight: 360)
             }
         }
     }
