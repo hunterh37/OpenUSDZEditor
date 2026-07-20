@@ -71,6 +71,9 @@ public struct EditorShellView: View {
     /// "Environment & Lighting"); edited via the popover control strip.
     @State private var environment = EnvironmentSettings()
     @State private var showEnvironment = false
+    /// Drives the viewport animation transport (play/pause/scrub/loop). Kept in
+    /// sync with the open stage's authored time range via `configure(from:)`.
+    @State private var playback = PlaybackController()
     @State private var activeSheet: Sheet?
 
     /// Output format for the one-click export, shared with the export panel and
@@ -546,8 +549,13 @@ public struct EditorShellView: View {
                 // (gizmo drags, inspector edits, undo).
                 liveTransforms: tutorial?.liveTransforms ?? document?.viewportLiveTransforms,
                 materialOverrides: document?.viewportMaterialOverrides,
-                environment: environment)
+                environment: environment,
+                animationTime: playback.animationTime)
                 .overlay(alignment: .topTrailing) { environmentButton }
+                .onAppear { playback.configure(from: stage?.metadata) }
+                .onChange(of: stage?.metadata) { _, newValue in
+                    playback.configure(from: newValue)
+                }
                 .overlay {
                     // Mesh edit mode: tool strip + active-tool indicator over
                     // the viewport (Phase 6; specs/mesh-editing.md).
@@ -555,11 +563,17 @@ public struct EditorShellView: View {
                 }
                 .overlay(alignment: .bottom) {
                     // The tour's narration card owns the bottom edge while it
-                    // runs; the hotkey hints return afterwards.
-                    if let tutorial {
-                        TutorialOverlay(engine: tutorial)
-                    } else if let document {
-                        ViewportHintOverlay(document: document)
+                    // runs; the hotkey hints return afterwards. The transport bar
+                    // (auto-hidden without animation) sits above whichever shows.
+                    VStack(spacing: 0) {
+                        if let tutorial {
+                            TutorialOverlay(engine: tutorial)
+                        } else if let document {
+                            ViewportHintOverlay(document: document)
+                        }
+                        if playback.isAvailable {
+                            PlaybackTransportBar(controller: playback)
+                        }
                     }
                 }
                 .background(editModeToggleShortcut)

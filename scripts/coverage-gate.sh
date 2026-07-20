@@ -49,11 +49,12 @@ MODULES=(
   "ScriptingKit|Packages/ScriptingKit|Sources/ScriptingKit|100"
   "AgentMCP|Packages/AgentMCP|Sources/AgentMCP|100"
   "DicyaninDesignSystem|Packages/DicyaninDesignSystem|Sources/DicyaninDesignSystem|95"
+  "QuickLookKit|Packages/QuickLookKit|Sources/QuickLookKit|100"
   "CLI|CLI|Sources|95"
   # Ratchet floors — pinned below spec target (noted), gap tracked in ROADMAP Phase T.
   "USDBridge|Packages/USDBridge|Sources/USDBridge|90"          # spec target 95
-  "ViewportKit|Packages/ViewportKit|Sources/ViewportKit|39"    # spec target 90
-  "EditorUI|Packages/EditorUI|Sources/EditorUI|30"             # spec target 90
+  "ViewportKit|Packages/ViewportKit|Sources/ViewportKit|40"    # spec target 90
+  "EditorUI|Packages/EditorUI|Sources/EditorUI|27"             # spec target 90
 )
 
 REPORT=0
