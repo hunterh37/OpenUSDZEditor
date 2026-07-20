@@ -117,7 +117,7 @@ With the golden-image, round-trip, corpus, and XCUITest harnesses now built by e
 - [x] Outliner (search, visibility, type icons) + read-only inspector (transform, prim, material, stage tabs)
 - [x] Stats HUD, bounds/AR-scale readout
 - [ ] Animation playback transport
-- [ ] Debug view modes: wireframe, normals, UV checker, matcap
+- [x] Debug view modes: wireframe, normals, UV checker, matcap
 - [ ] QuickLook thumbnail + preview extension for `.usda`
 - [ ] Build-from-source docs + unsigned release builds on GitHub Releases
 
