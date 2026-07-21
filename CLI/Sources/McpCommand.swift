@@ -97,17 +97,27 @@ enum McpCommand {
             return await pump.run()
         }
         do {
-            guard let executor = ProcessBridgeExecutor(scriptPath: try CLIRunner.snapshotScriptPath()) else {
+            let snapshotScript = try CLIRunner.snapshotScriptPath()
+            guard let saveExecutor = ProcessBridgeExecutor(scriptPath: snapshotScript) else {
                 printError("error: no Python interpreter found — run scripts/fetch-python-runtime.sh")
                 return 1
             }
-            let bridged = try await BridgedStage.open(url: resolution.fileURL, executor: executor)
+            // The MCP server is long-lived and opens many files (the initial
+            // document plus every asset re-import), so it opens through one
+            // resident interpreter instead of respawning per open. Save still
+            // uses the one-shot executor (concrete type; save is infrequent).
+            let serverScript = URL(fileURLWithPath: snapshotScript)
+                .deletingLastPathComponent()
+                .appendingPathComponent("bridge_server.py").path
+            let openExecutor = PersistentBridgeExecutor(
+                pythonPath: saveExecutor.pythonPath, serverScriptPath: serverScript)
+            let bridged = try await BridgedStage.open(url: resolution.fileURL, executor: openExecutor)
             let session = EditSession(
                 snapshot: bridged.snapshot,
                 sourceURL: resolution.fileURL,
                 strictness: resolution.strictness)
-            session.saveExecutor = executor
-            session.bridgeExecutor = executor
+            session.saveExecutor = saveExecutor
+            session.bridgeExecutor = openExecutor
 
             let locator = PythonRuntimeLocator()
             let renderer: (any RenderExecuting)? = ThumbnailCommand.locateUsdrecord(
