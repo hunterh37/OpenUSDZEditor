@@ -99,6 +99,45 @@ final class PivotMathTests: XCTestCase {
         // Row-major, row-vector USD matrix4d puts translation in the last row.
         XCTAssertEqual(Array(rm[12...15]), [1, 2, 3, 1])
     }
+
+    func testRowMajorRoundTrip() {
+        let m = PivotMath.translation(SIMD3<Double>(2, -1, 4))
+            * PivotMath.rotation(axis: [0.3, 0.9, -0.2], degrees: 37)
+        let back = PivotMath.fromUsdRowMajor(PivotMath.usdRowMajor(m))
+        XCTAssertLessThan(JointInvariants.maxComponentDifference(back, m), 1e-12)
+    }
+
+    func testFromUsdRowMajorRejectsWrongLength() {
+        XCTAssertLessThan(
+            JointInvariants.maxComponentDifference(PivotMath.fromUsdRowMajor([1, 2, 3]),
+                                                   matrix_identity_double4x4), 1e-12)
+    }
+
+    func testPivotTransformRowMajorRestIsTranslation() {
+        let j = Joint.openable(name: "l", kind: .revolute, target: "L",
+                               axis: [1, 0, 0], pivot: [0, 1, 2], openValue: 90)
+        let rest = PivotMath.pivotTransformRowMajor(j, value: 0)
+        XCTAssertEqual(Array(rest[12...15]), [0, 1, 2, 1])
+    }
+
+    func testPivotTransformForStateAndUnknownState() {
+        let j = Joint.openable(name: "l", kind: .revolute, target: "L",
+                               axis: [1, 0, 0], pivot: [0, 1, 0], openValue: 90)
+        XCTAssertNotNil(PivotMath.pivotTransformRowMajor(j, state: "open"))
+        XCTAssertNil(PivotMath.pivotTransformRowMajor(j, state: "ajar"))
+    }
+
+    func testChildReparentRowMajorKeepsWorldAtRest() {
+        let j = Joint.openable(name: "l", kind: .revolute, target: "L",
+                               axis: [1, 0, 0], pivot: [0, 1, 0], openValue: 90)
+        let childLocal = PivotMath.usdRowMajor(PivotMath.translation(SIMD3<Double>(0, 2, 1)))
+        let childReparent = PivotMath.childReparentRowMajor(j, childLocalRowMajor: childLocal)
+        // pivot(rest) · childReparent == childLocal (world unchanged when closed)
+        let composed = PivotMath.fromUsdRowMajor(PivotMath.pivotTransformRowMajor(j, value: 0))
+            * PivotMath.fromUsdRowMajor(childReparent)
+        XCTAssertLessThan(
+            JointInvariants.maxComponentDifference(composed, PivotMath.fromUsdRowMajor(childLocal)), 1e-9)
+    }
 }
 
 final class JointInvariantsTests: XCTestCase {

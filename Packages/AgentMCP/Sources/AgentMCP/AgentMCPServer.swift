@@ -46,6 +46,7 @@ public enum AgentMCPServer {
 
         ReadTools.register(on: server, session: session)
         MutateTools.register(on: server, session: session)
+        JointTools.register(on: server, session: session)
         VerifyTools.register(on: server, session: session)
         RenderTools.register(
             on: server, session: session,

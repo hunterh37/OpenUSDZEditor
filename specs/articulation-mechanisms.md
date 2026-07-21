@@ -114,20 +114,18 @@ Every construct is measured against the active export profile (RealityKit/QuickL
 
 | Representation | How it's authored | RealityKit / QuickLook | lossless / full-USD |
 |---|---|---|---|
-| **A. State variants** (default) | A `state` **variant set** on the assembly root; each variant (`closed`, `open`) authors the pivot Xform's `xformOp:transform`. `defaultState` = the variant selection. | **Preserved** — QuickLook/RealityKit load the selected variant (discrete open or closed). No dependency on the animation gap. | Preserved |
-| **B. Baked swing** | `xformOp:transform` **time samples** on the pivot Xform interpolating closed→open over a time range; stage `startTimeCode`/`endTimeCode` set. | Preserved **once the time-sample round-trip gap closes** (RealityKit `AnimationResource` plays it); until then flagged non-portable. | Preserved |
-| **C. Physics joint** | A `UsdPhysics` `PhysicsRevoluteJoint`/`PhysicsPrismaticJoint` with `physics:axis`, local anchors from `pivot`, and `physics:lower/upperLimit`. | **Baked** to variant A (discrete) or dropped; flagged. | Rig/physics intent preserved as native `UsdPhysics`. |
+| **A. Pivot Xform + state edit** (default) | The pivot `Xform` carries a single `xformOp:transform` (its current state) plus a `uniform string mechanism:joint` describing axis/pivot/limits/states. Open/close is `SetJointStateCommand` re-authoring that one matrix. | **Preserved** — pure standard Xform ops + one custom string attr. Ships in the part's `defaultState` pose; runtime tooling reads `mechanism:joint` to drive it. Round-trips through the existing serializer. | Preserved |
+| **B. State variants** (enhancement) | A `state` **variant set** on the pivot; each variant (`closed`, `open`) authors the pivot's `xformOp:transform`, so both poses ship switchably in one file (the §5.2 variant switcher). | Preserved — QuickLook/RealityKit load the selected variant. Requires variant-scoped opinions, authored through the usd-core **bridge** (the Swift `VariantSet` projection carries no scoped content). | Preserved |
+| **C. Baked swing** (enhancement) | `xformOp:transform` **time samples** on the pivot interpolating closed→open; stage `startTimeCode`/`endTimeCode` set. | Preserved **once the time-sample round-trip gap closes** (RealityKit `AnimationResource` plays it); flagged non-portable until then. | Preserved |
+| **D. Physics joint** (enhancement) | A `UsdPhysics` `PhysicsRevoluteJoint`/`PhysicsPrismaticJoint` with `physics:axis`, anchors from `pivot`, `physics:lower/upperLimit`. | **Baked** to A (discrete) or dropped; flagged. | Rig/physics intent preserved as native `UsdPhysics`. |
 
-**Default deliverable = A (state variants).** It gives real, portable open/close in QuickLook and RealityKit today, with zero dependency on the open round-trip gap. B and C layer on for richer profiles.
+**Default deliverable = A.** It is exactly PRD §5.3 ("open the door — proper Xform ops on that prim"): standard Xform ops plus one custom string attribute, RealityKit/QuickLook-clean, undoable, and round-trip-safe through the *existing* serializer — no dependency on the variant-content bridge gap or the open time-sample round-trip gap. Open/close is a normal, undoable transform edit; the part ships in its `defaultState` (closed) pose with the mechanism described on the pivot for runtime tooling and the export-compliance layer.
 
-### Dependency: variant-set authoring (prerequisite, Phase A)
+B, C, and D are **profile-gated enhancements**, each flagged against the active export profile per Pillar 2 — never silently dropped:
 
-Representation A needs the ability to *create* a variant set and *add* variants — which EditingKit/MCP cannot do today (`set_variant` only selects). Phase A adds, as its own reusable capability:
-
-- `EditingKit`: `CreateVariantSetCommand`, `AddVariantCommand` (undoable, diff-synthesized, validated), each capturing prior state for undo.
-- `USDCore`: ensure `VariantSet` authoring round-trips through `USDASerializer` (variant blocks + selection) — extend `roundtrip-gate.sh` with a `variants.usda` fixture and a tightened expectation.
-
-This is generally useful (turntables, colorways, size options) beyond mechanisms.
+- **B (state variants)** needs variant-scoped opinions, which the in-memory `VariantSet` projection does not model (it is set-name + variant-names + selection only; the USD stage is the source of truth via the bridge). So B is authored through the usd-core bridge, and — as its own reusable capability, useful for colorways/size options too — adds `CreateVariantSetCommand`/`AddVariantCommand` + a `variants.usda` round-trip fixture in `roundtrip-gate.sh`.
+- **C** is gated on closing the `animated.usda` time-sample round-trip gap.
+- **D** is gated on the physics export profile.
 
 ## MCP surface — so coding agents *know* they can do this
 
@@ -194,10 +192,12 @@ The existing `sculpt-from-image` prompt's step 2 is extended: when the object ha
 
 ## Phasing
 
-- **Phase A — variant-set authoring (prerequisite).** `CreateVariantSetCommand`/`AddVariantCommand` in EditingKit; `create_variant_set`/`add_variant` MCP tools; USDCore variant round-trip fixture. Independently useful.
-- **Phase B — mechanisms (headline).** `MechanismKit` module (data + pivot math + invariants); pivot-Xform authoring + representation A; `create_joint`/`set_joint_state` tools; `set_transform` `pivot`; `author-hinged-object` workflow prompt; SculptKit `joints` + interaction-pass authoring; full test/governance set.
-- **Phase C — baked swing animation.** Gated on closing the time-sample round-trip gap (`animated.usda`). Representation B + `bake_joint_animation`.
-- **Phase D — physics joints (optional).** `UsdPhysics` revolute/prismatic authoring for interactive/full-USD profiles + degradation to A.
+- **Phase B — mechanisms (headline, the default path).** ✅ Shipped: `MechanismKit` module (data + pivot math + invariants, 100% coverage + fuzz corpus); `CreateJointCommand`/`SetJointStateCommand` in EditingKit (representation A — pivot Xform + `mechanism:joint`, undoable, round-trip-safe); `create_joint`/`set_joint_state` MCP tools; `author-hinged-object` workflow prompt. Remaining in-phase: SculptKit `joints` + interaction-pass authoring; optional `set_transform` `pivot` convenience.
+- **Enhancement — state variants (representation B).** Bridge-authored variant-scoped poses so both states ship switchably: `CreateVariantSetCommand`/`AddVariantCommand` in EditingKit + `create_variant_set`/`add_variant` MCP tools + a `variants.usda` round-trip fixture. Independently useful (colorways, size options).
+- **Enhancement — baked swing animation (representation C).** Gated on closing the time-sample round-trip gap (`animated.usda`). `bake_joint_animation` tool.
+- **Enhancement — physics joints (representation D).** `UsdPhysics` revolute/prismatic authoring for the interactive/full-USD profile + degradation to A.
+
+> Phase B was built first (not a prerequisite "Phase A") precisely because representation A carries the whole capability with no dependency on the variant-content bridge gap — the enterprise-grade, PRD-aligned default. The variant/animation/physics enhancements layer on without blocking it.
 
 ## Console & CLI parity
 

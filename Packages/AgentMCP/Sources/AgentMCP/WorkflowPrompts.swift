@@ -92,6 +92,34 @@ public enum WorkflowPrompts {
             """))
 
         server.register(MCPPrompt(
+            name: "author-hinged-object",
+            description: "Make a part open, close, or swing about a hinge/slider (lid, door, cap, drawer).",
+            text: """
+            Give a part a working hinge or slider so it opens, closes, or swings — an \
+            AirPods-case lid, a chest lid, a door, a bottle cap, a drawer. This authors proper \
+            Xform ops (PRD §5.3 "open the door"), RealityKit/QuickLook-clean, fully undoable.
+            1. Identify the MOVING part (a prim) with `query_scene` / `get_prim`, and read its \
+            world bbox — you place the hinge on one of its edges.
+            2. Pick the hinge geometry, both in the part's PARENT local space:
+               - `axis`: the direction the hinge line runs (a lid that flips up about its rear \
+            edge hinges around the X axis → [1, 0, 0]).
+               - `pivot`: a point ON that hinge line (the midpoint of the rear-top edge), NOT the \
+            part's centre — this is what makes it swing about the edge instead of spinning in place.
+            3. `create_joint { target, kind: "revolute", axis, pivot, openValue: 105 }` \
+            (degrees). For a drawer use `kind: "prismatic"` and `openValue` in scene units along \
+            the axis. It inserts a `<part>_pivot` Xform and leaves the part exactly where it was \
+            when closed; it returns `pivotPath` and the state names ["closed", "open"].
+            4. Preview: `set_joint_state { target: <pivotPath>, state: "open" }` then \
+            `render_views {}`; check the part swings about the intended edge. Flip back with \
+            `state: "closed"`, or scrub with `set_joint_state { target, value: 45 }`.
+            5. `validate {}` (zero new errors) and `check_compliance { profile: "arkit" }` \
+            (`isExportAllowed` must stay true — the hinge is standard Xform ops). Then `save {}`.
+            The default profile ships the part in its closed pose with the hinge described on the \
+            pivot for runtime tooling; switchable USD variants and baked swing animation are \
+            full-USD-profile enhancements.
+            """))
+
+        server.register(MCPPrompt(
             name: "fix-validation-errors",
             description: "Systematically clear validation diagnostics, worst first.",
             text: """

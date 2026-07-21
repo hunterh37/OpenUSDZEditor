@@ -90,6 +90,39 @@ public enum PivotMath {
         return (0..<4).flatMap { r in (0..<4).map { c in t[c][r] } }
     }
 
+    /// Inverse of `usdRowMajor`: read a USD row-major (row-vector) `matrix4d`
+    /// value back into our column-vector matrix. A 16-element input is required;
+    /// a wrong-length input yields identity (the invariant/command layer rejects
+    /// malformed matrices separately).
+    public static func fromUsdRowMajor(_ a: [Double]) -> simd_double4x4 {
+        guard a.count == 16 else { return matrix_identity_double4x4 }
+        // Column j of the column-vector matrix is row j of the row-major data.
+        func col(_ j: Int) -> SIMD4<Double> { SIMD4<Double>(a[j*4+0], a[j*4+1], a[j*4+2], a[j*4+3]) }
+        return simd_double4x4(columns: (col(0), col(1), col(2), col(3)))
+    }
+
+    // MARK: - Row-major authoring API (EditingKit never touches simd)
+
+    /// The pivot Xform's `xformOp:transform` value (USD row-major) for a joint
+    /// at a given value. At value 0 this is the rest pose, `T(pivot)`.
+    public static func pivotTransformRowMajor(_ joint: Joint, value: Double) -> [Double] {
+        usdRowMajor(pivotLocalMatrix(joint, value: value))
+    }
+
+    /// The pivot transform for a named state, or nil if the state is undeclared.
+    public static func pivotTransformRowMajor(_ joint: Joint, state: String) -> [Double]? {
+        joint.value(ofState: state).map { pivotTransformRowMajor(joint, value: $0) }
+    }
+
+    /// The moving child's re-parent `xformOp:transform` value (USD row-major),
+    /// given its current local transform (USD row-major). Combined with the rest
+    /// pivot transform it reproduces the child's original placement exactly.
+    public static func childReparentRowMajor(_ joint: Joint,
+                                             childLocalRowMajor: [Double]) -> [Double] {
+        let childLocal = fromUsdRowMajor(childLocalRowMajor)
+        return usdRowMajor(childReparentMatrix(joint, childLocal: childLocal))
+    }
+
     // MARK: - Internal helpers
 
     static let epsilon = 1e-9
