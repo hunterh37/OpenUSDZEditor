@@ -30,6 +30,7 @@ policy_for() {
   case "$1" in
     USDCore)              echo "" ;;
     MeshKit)              echo "" ;;                    # pure Swift, zero deps (specs/mesh-editing.md)
+    MechanismKit)         echo "" ;;                    # pure Swift, zero deps — rigid articulation math (specs/articulation-mechanisms.md)
     DicyaninDesignSystem) echo "" ;;
     QuickLookKit)         echo "" ;;                    # pure Swift render-plan logic for the QuickLook .appex (specs/quicklook.md)
     USDBridge)            echo "USDCore" ;;
@@ -37,9 +38,9 @@ policy_for() {
     ValidationKit)        echo "USDCore" ;;
     ScriptingKit)         echo "USDCore" ;;
     ViewportKit)          echo "USDCore MeshKit" ;;     # component-overlay rendering (specs/mesh-editing.md)
-    EditingKit)           echo "USDCore ValidationKit MeshKit" ;;  # QuickFixRegistry maps Diagnostics -> undoable commands
-    SculptKit)            echo "USDCore MeshKit" ;;     # pure staged-sculpt pipeline logic (specs/sculpt-pipeline.md)
-    AgentMCP)             echo "USDCore USDBridge EditingKit ValidationKit ConversionKit ScriptingKit MeshKit SculptKit" ;;  # MCP adapter over the kits (docs/AGENT_MCP_PLAN.md); never EditorUI
+    EditingKit)           echo "USDCore ValidationKit MeshKit MechanismKit" ;;  # QuickFixRegistry maps Diagnostics -> undoable commands; MechanismKit: rigid-joint authoring commands
+    SculptKit)            echo "USDCore MeshKit MechanismKit" ;;     # pure staged-sculpt pipeline logic (specs/sculpt-pipeline.md); MechanismKit: articulation in the spec/runtime layer
+    AgentMCP)             echo "USDCore USDBridge EditingKit ValidationKit ConversionKit ScriptingKit MeshKit MechanismKit SculptKit" ;;  # MCP adapter over the kits (docs/AGENT_MCP_PLAN.md); never EditorUI
     EditorUI)             echo "USDCore USDBridge ConversionKit ViewportKit EditingKit ValidationKit ScriptingKit DicyaninDesignSystem MeshKit SculptKit" ;;  # SculptKit: in-app staged-sculpt runner (specs/sculpt-pipeline.md)
     App)                  echo "USDCore USDBridge ConversionKit ViewportKit EditingKit ValidationKit ScriptingKit EditorUI DicyaninDesignSystem MeshKit AgentMCP" ;;  # App hosts the in-app MCP editing session (specs/agent-live-editing.md); composition root, like CLI
     CLI)                  echo "USDCore USDBridge ConversionKit ValidationKit ScriptingKit EditingKit MeshKit AgentMCP" ;;  # never EditorUI/DesignSystem
@@ -93,7 +94,7 @@ for entry in $TARGETS; do
   fi
 
   # 4. Framework bans: pure-Swift modules stay free of UI/GPU/Python frameworks.
-  if [[ "$key" == "USDCore" || "$key" == "MeshKit" ]]; then
+  if [[ "$key" == "USDCore" || "$key" == "MeshKit" || "$key" == "MechanismKit" ]]; then
     while IFS=: read -r file _ line; do
       [[ -z "$file" ]] && continue
       mod=$(echo "$line" | sed -E 's/^[[:space:]]*(@testable )?import +([A-Za-z_][A-Za-z0-9_]*).*/\2/')

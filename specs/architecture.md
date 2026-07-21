@@ -13,6 +13,7 @@ OpenUSDZEditor/
 │   ├── USDCore/                  # Pure Swift USD stage model (no UI, no Python)
 │   ├── USDBridge/                # Python/usd-core interop (only module touching Python)
 │   ├── MeshKit/                  # Pure Swift half-edge mesh model + topology ops (zero deps)
+│   ├── MechanismKit/             # Pure Swift rigid-articulation math: hinge/slider joints, pivot transforms, invariants (zero deps)
 │   ├── ConversionKit/            # Importers, pipeline stages, batch engine
 │   ├── ViewportKit/              # RealityKit viewport, camera, gizmos, IBL
 │   ├── EditingKit/               # Command layer, undo, stage mutations
@@ -35,6 +36,7 @@ OpenUSDZEditor/
 App ─▶ EditorUI ─▶ {ViewportKit, EditingKit, ConversionKit, ValidationKit, ScriptingKit} ─▶ USDCore
 USDBridge ─▶ USDCore          (bridge implements USDCore protocols)
 {EditingKit, ViewportKit} ─▶ MeshKit   (MeshKit itself imports nothing internal)
+MechanismKit imports nothing internal (pure leaf, like MeshKit); its consumers ({EditingKit, SculptKit, AgentMCP}) import it for rigid-joint authoring (specs/articulation-mechanisms.md)
 SessionKit (planned) ─▶ {USDCore, ViewportKit, EditingKit}; consumed by EditorUI/App only — cross-launch session envelope + restore, landed with its governance entry when Phase 1 begins (specs/session-restoration.md)
 DicyaninDesignSystem ◀─ EditorUI only
 QuickLookKit — leaf, zero internal deps (pure render-plan logic; App QuickLook .appex targets consume it)
