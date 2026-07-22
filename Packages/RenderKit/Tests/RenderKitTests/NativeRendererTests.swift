@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import openusdz
+@testable import RenderKit
 
 /// The render stage the tool hands the renderer is always `USDASerializer`
 /// output: `UsdPreviewSurface` materials, `material:binding` on the meshes, and
@@ -235,6 +235,25 @@ struct RenderStageParseTests {
     @Test func scalarParsesNegativeAndDecimal() {
         #expect(RenderStageParse.scalar(after: "v", in: "double v = -1.5") == -1.5)
         #expect(RenderStageParse.scalar(after: "v", in: "no value") == nil)
+    }
+
+    @Test func scalarStopsAtTrailingNonNumeric() {
+        // A numeric token followed by a non-numeric char ends the token.
+        #expect(RenderStageParse.scalar(after: "v", in: "v = 35 (mm)") == 35)
+        #expect(RenderStageParse.scalar(after: "v", in: "v = 42abc") == 42)
+        // A non-numeric value right after '=' yields no number (token stays empty).
+        #expect(RenderStageParse.scalar(after: "v", in: "v = none") == nil)
+    }
+
+    @Test func cameraReturnsNilForMalformedTransform() {
+        // A Camera whose transform has the wrong arity → no pose parsed.
+        let stage = """
+        def Camera "Cam"
+        {
+            matrix4d xformOp:transform = ( (1, 0, 0), (0, 1, 0) )
+        }
+        """
+        #expect(RenderStageParse.camera(named: "Cam", usda: stage) == nil)
     }
 }
 

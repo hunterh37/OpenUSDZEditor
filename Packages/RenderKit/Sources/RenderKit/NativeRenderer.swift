@@ -12,8 +12,8 @@ import SceneKit.ModelIO
 /// Storm (`usdrecord`) only when the operator opts in with `DICYANIN_USDRECORD`
 /// pointing at a real binary. Pure and injectable so the policy is unit-tested
 /// without a filesystem or GPU.
-enum NativeRendererSelection {
-    static func make(
+public enum NativeRendererSelection {
+    public static func make(
         environment: [String: String],
         fileExists: (String) -> Bool
     ) -> any RenderExecuting {
@@ -33,7 +33,7 @@ enum NativeRendererSelection {
 /// `xformOp:transform` encodes the framing. This enum turns that text into the
 /// two things a native renderer needs — per-prim diffuse colour and the camera
 /// pose — without linking any GPU framework, so it is exhaustively unit-tested.
-enum RenderStageParse {
+public enum RenderStageParse {
 
     /// Prim (leaf) name → resolved diffuse RGB in 0...1, following each prim's
     /// `material:binding` to its `Material`'s `UsdPreviewSurface.inputs:diffuseColor`.
@@ -271,12 +271,14 @@ enum RenderStageParse {
 /// prim the render tool authored — the same Apple frameworks the app's viewport
 /// is built on. No `usd-core` / `usdrecord` required, so `render_views` returns
 /// real pixels out of the box; `usd-core` stays reserved for authoring/round-trip.
-struct NativeSceneKitRenderer: RenderExecuting {
+public struct NativeSceneKitRenderer: RenderExecuting {
+    public init() {}
+
 
     // coverage:disable — drives SceneKit/Metal offscreen (needs a GPU); the
     // parsing it depends on (RenderStageParse) is exhaustively unit-tested, and
     // the render tool's stage/camera authoring is tested against a stub renderer.
-    func render(stageURL: URL, outputURL: URL, cameraPath: String, size: Int) async throws {
+    public func render(stageURL: URL, outputURL: URL, cameraPath: String, size: Int) async throws {
         #if canImport(SceneKit)
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw NativeRenderError.noMetalDevice
@@ -322,10 +324,38 @@ struct NativeSceneKitRenderer: RenderExecuting {
     // coverage:enable
 }
 
-enum NativeRenderError: Error {
+public enum NativeRenderError: Error {
     case noMetalDevice
     case encodeFailed
     case unsupportedPlatform
+    case usdrecordFailed(status: Int32)
+}
+
+/// Storm-backed renderer: shells out to a real `usdrecord`. Opt-in via
+/// `DICYANIN_USDRECORD`; the native SceneKit renderer is the zero-config default.
+public struct UsdrecordRenderer: RenderExecuting {
+    public var usdrecordPath: String
+
+    public init(usdrecordPath: String) { self.usdrecordPath = usdrecordPath }
+
+    // coverage:disable — spawns the real usdrecord binary; the render tool's stage/camera authoring is unit-tested against a stub renderer.
+    public func render(stageURL: URL, outputURL: URL, cameraPath: String, size: Int) async throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: usdrecordPath)
+        process.arguments = [
+            "--imageWidth", String(size),
+            "--camera", cameraPath,
+            stageURL.path, outputURL.path,
+        ]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw NativeRenderError.usdrecordFailed(status: process.terminationStatus)
+        }
+    }
+    // coverage:enable
 }
 
 #if canImport(SceneKit)

@@ -24,6 +24,7 @@ OpenUSDZEditor/
 │   ├── SculptKit/                # Pure staged-sculpt pipeline logic (image→USD spec, passes, gates)
 │   ├── SessionKit/               # Cross-launch session envelope + restore (models, persistence, WAL recovery)
 │   ├── AgentMCP/                 # MCP server: typed, transactional agent editing API over the kits
+│   ├── RenderKit/                # Concrete RenderExecuting backends (native SceneKit + usdrecord) injected into CLI/App MCP servers
 │   ├── EditorUI/                 # Panels: outliner, inspector, console, toolbar
 │   ├── QuickLookKit/             # Pure render-plan logic for the Finder QuickLook .appex (zero deps)
 │   └── DicyaninDesignSystem/     # Tokens, colors, typography, reusable controls
@@ -51,6 +52,7 @@ SculptKit ─▶ {USDCore, MeshKit}   (pure pipeline logic — spec model, valid
 EditorUI ─▶ SculptKit             (in-app staged-sculpt runner: applies BuildSteps as live document commands)
 App ─▶ AgentMCP                    (composition root hosts the in-app MCP editing session on the open document; specs/agent-live-editing.md. EditorUI still must NOT import AgentMCP)
 AgentMCP ─▶ {USDBridge, EditingKit, ValidationKit, ConversionKit, ScriptingKit, MeshKit, SculptKit} ─▶ USDCore   (thin MCP adapter, docs/AGENT_MCP_PLAN.md; never EditorUI)
+RenderKit ─▶ AgentMCP              (concrete RenderExecuting backends — native SceneKit + usdrecord — injected into the CLI- and App-hosted MCP servers so render_views works out of the box; both CLI and App depend on it, specs/agent-live-editing.md)
 ```
 
 The authoritative, machine-checked form of this graph is the policy table in
