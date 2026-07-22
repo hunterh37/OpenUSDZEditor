@@ -49,6 +49,68 @@ enum RenderStageParse {
         return out
     }
 
+    /// Prim (leaf) name → the resolved diffuse **texture** asset path, following
+    /// each prim's `material:binding` to a `Material` whose `UsdPreviewSurface`
+    /// diffuse is driven by a `UsdUVTexture` (`inputs:file = @...@`). Model I/O
+    /// drops these, and `applyColors` only ever set a constant colour, so a
+    /// textured material rendered flat grey (#90). This resolution lets the
+    /// renderer bind the real image.
+    static func textureFilesByPrimName(usda: String) -> [String: String] {
+        let materials = materialTextureFiles(usda: usda)  // material leaf → asset path
+        let bindings = primBindings(usda: usda)           // prim leaf → material leaf
+        var out: [String: String] = [:]
+        for (prim, material) in bindings {
+            if let file = materials[material] { out[prim] = file }
+        }
+        return out
+    }
+
+    /// `Material` leaf name → its diffuse `UsdUVTexture.inputs:file` asset path
+    /// (the raw `@...@` token, package-relative paths included).
+    static func materialTextureFiles(usda: String) -> [String: String] {
+        var out: [String: String] = [:]
+        var current: String?
+        for line in usda.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if let name = definitionName(trimmed, keyword: "def Material") {
+                current = name
+            } else if trimmed.hasPrefix("def "), !trimmed.contains("Shader") {
+                current = nil
+            }
+            // The first `inputs:file = @...@` inside a material scope (the diffuse
+            // texture's UsdUVTexture Shader). Keep the first — normal/roughness
+            // maps come later and aren't the base colour.
+            if let current, out[current] == nil, trimmed.contains("inputs:file"),
+               let asset = assetToken(in: trimmed) {
+                out[current] = asset
+            }
+        }
+        return out
+    }
+
+    /// The `@...@`-delimited asset path on a line, without the delimiters.
+    static func assetToken(in line: String) -> String? {
+        guard let open = line.firstIndex(of: "@") else { return nil }
+        let afterOpen = line.index(after: open)
+        guard let close = line[afterOpen...].firstIndex(of: "@") else { return nil }
+        let token = String(line[afterOpen..<close])
+        return token.isEmpty ? nil : token
+    }
+
+    /// Resolve a USD texture asset path to an absolute filesystem path relative
+    /// to the stage file. Handles the `usdz` package case where an internal ref
+    /// looks like `0/earth.jpg` or `@./0/earth.jpg@`; when the stage itself is a
+    /// `.usdz` package we cannot address files inside it as loose paths, so the
+    /// caller must extract — this returns the package-qualified path unchanged
+    /// for that case (signalled by a nil return). Pure and testable.
+    static func resolveTexturePath(assetPath: String, stageURL: URL) -> String? {
+        let path = assetPath.hasPrefix("./") ? String(assetPath.dropFirst(2)) : assetPath
+        if path.hasPrefix("/") { return path }                 // already absolute
+        // Loose texture beside (or under) the stage's .usda directory.
+        let base = stageURL.deletingLastPathComponent()
+        return base.appendingPathComponent(path).standardizedFileURL.path
+    }
+
     /// `Material` leaf name → its `inputs:diffuseColor` RGB.
     static func materialDiffuse(usda: String) -> [String: [Double]] {
         var out: [String: [Double]] = [:]
@@ -230,9 +292,10 @@ struct NativeSceneKitRenderer: RenderExecuting {
         scene.lightingEnvironment.contents = NSColor(calibratedWhite: 0.5, alpha: 1)
         scene.lightingEnvironment.intensity = 1.1
 
-        // Re-apply diffuse colours Model I/O dropped.
+        // Re-apply diffuse colours + textures Model I/O dropped (#90).
         let colors = RenderStageParse.diffuseColorsByPrimName(usda: usda)
-        applyColors(colors, to: scene.rootNode)
+        let textures = RenderStageParse.textureFilesByPrimName(usda: usda)
+        applyColors(colors, textures: textures, stageURL: stageURL, to: scene.rootNode)
 
         // Key + fill + ambient, tuned to avoid blowing out light materials.
         scene.rootNode.addChildNode(makeLight(.ambient, 120, nil))
@@ -268,17 +331,37 @@ enum NativeRenderError: Error {
 #if canImport(SceneKit)
 extension NativeSceneKitRenderer {
     // coverage:disable — SceneKit scene-graph mutation, exercised only under a GPU.
-    private func applyColors(_ colors: [String: [Double]], to node: SCNNode) {
-        if let name = node.name, let rgb = colors[name], let geometry = node.geometry {
-            let material = SCNMaterial()
-            material.lightingModel = .physicallyBased
-            material.diffuse.contents = NSColor(
-                red: CGFloat(rgb[0]), green: CGFloat(rgb[1]), blue: CGFloat(rgb[2]), alpha: 1)
-            material.roughness.contents = 0.5
-            material.metalness.contents = 0.0
-            geometry.materials = [material]
+    private func applyColors(
+        _ colors: [String: [Double]],
+        textures: [String: String],
+        stageURL: URL,
+        to node: SCNNode
+    ) {
+        if let name = node.name, let geometry = node.geometry {
+            // A prim bound to a texture-driven diffuse: load the image and set it
+            // as diffuse.contents (albedo is sRGB). Falls back to the constant
+            // colour when the texture can't be loaded, and to nothing when the
+            // prim has neither (leaving Model I/O's material).
+            if let asset = textures[name],
+               let path = RenderStageParse.resolveTexturePath(assetPath: asset, stageURL: stageURL),
+               let image = NSImage(contentsOfFile: path) {
+                let material = SCNMaterial()
+                material.lightingModel = .physicallyBased
+                material.diffuse.contents = image
+                material.roughness.contents = 0.5
+                material.metalness.contents = 0.0
+                geometry.materials = [material]
+            } else if let rgb = colors[name] {
+                let material = SCNMaterial()
+                material.lightingModel = .physicallyBased
+                material.diffuse.contents = NSColor(
+                    red: CGFloat(rgb[0]), green: CGFloat(rgb[1]), blue: CGFloat(rgb[2]), alpha: 1)
+                material.roughness.contents = 0.5
+                material.metalness.contents = 0.0
+                geometry.materials = [material]
+            }
         }
-        node.childNodes.forEach { applyColors(colors, to: $0) }
+        node.childNodes.forEach { applyColors(colors, textures: textures, stageURL: stageURL, to: $0) }
     }
 
     private func makeLight(_ type: SCNLight.LightType, _ intensity: CGFloat, _ euler: SCNVector3?) -> SCNNode {
